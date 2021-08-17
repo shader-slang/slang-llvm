@@ -41,10 +41,20 @@
 -- Some globals needed by following functions
 --
 
-isTargetWindows = false
+g_isTargetWindows = false
+g_targetDetail = nil
 
-function calcIsWindowsTarget(targetDetail)
-    return (os.target() == "windows") and not (targetDetail == "mingw" or targetDetail == "cygwin")
+function initGlobals(inTargetDetail)
+    g_targetDetail = inTargetDetail
+    g_isTargetWindows = (os.target() == "windows") and not (inTargetDetail == "mingw" or inTargetDetail == "cygwin")
+end
+
+function isTargetWindows()
+    return g_isTargetWindows
+end
+
+function getTargetDetail()
+    return g_targetDetail
 end
 
 -- 
@@ -86,7 +96,7 @@ end
 
 function findLibraries(basePath, inMatchName)
     local matchName = inMatchName
-    if isTargetWindows then
+    if isTargetWindows() then
         matchName = inMatchName .. ".lib"
     else
         matchName = "lib" .. inMatchName .. ".*"
@@ -100,7 +110,7 @@ function findLibraries(basePath, inMatchName)
         -- Strip off path and extension
         local libName = path.getbasename(v)
         
-        if not isTargetWindows then
+        if not isTargetWindows() then
             -- If the name starts with "lib" strip it
             libName = trimPrefix(libName, "lib")
         end
@@ -127,6 +137,23 @@ function concatTables(a, b)
     a = table.table_copy(a)
     appendTable(a, b)
     return a
+end
+
+-- A function to return a name to place project files under 
+-- in build directory
+--
+-- This is complicated in so far as when this is used (with location for example)
+-- we can't use Tokens 
+-- https://github.com/premake/premake-core/wiki/Tokens
+
+function getBuildLocationName()
+    if not not getTargetDetail() then
+        return getTargetDetail()
+    elseif isTargetWindows() then
+        return "visual-studio"
+    else
+        return os.target()
+    end 
 end
 
 --
@@ -157,10 +184,10 @@ end
 llvmBuildPath = llvmPath .. "/build"
 libPrefix = ""
 
--- Is true when the target is really windows (ie not something on top of windows like cygwin)
-isTargetWindows = calcIsWindowsTarget(targetDetail)
+-- Init globals used for setting up projects
+initGlobals(targetDetail)
 
-if (isTargetWindows) then
+if (isTargetWindows()) then
     llvmBuildPath = llvmPath .. "/build.vs"
 end
 
@@ -171,13 +198,13 @@ end
 
 targetName = "%{cfg.system}-%{cfg.platform:lower()}"
 
-if not (targetDetail == nil) then
-    targetName = targetDetail .. "-%{cfg.platform:lower()}"
+if not (getTargetDetail() == nil) then
+    targetName = getTargetDetail() .. "-%{cfg.platform:lower()}"
 end
 
 -- This is needed for gcc, for the 'fileno' functions on cygwin
 -- _GNU_SOURCE makes realpath available in gcc
-if targetDetail == "cygwin" then
+if getTargetDetail() == "cygwin" then
     buildoptions { "-D_POSIX_SOURCE" }
     filter { "toolset:gcc*" }
         buildoptions { "-D_GNU_SOURCE" }
@@ -204,8 +231,11 @@ workspace "slang-llvm"
 
     -- C++11 
     cppdialect "C++11"
+    
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
-    staticruntime "On"
+    filter { "toolset:not msc-*" }
+        -- For now on windows we don't worry about this until we can build LLVM as STATIC
+        staticruntime "On"
     
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     
@@ -282,22 +312,7 @@ function addSourceDir(path)
 end
 
 --
--- A function to return a name to place project files under 
--- in build directory
---
--- This is complicated in so far as when this is used (with location for example)
--- we can't use Tokens 
--- https://github.com/premake/premake-core/wiki/Tokens
 
-function getBuildLocationName()
-    if not not targetDetail then
-        return targetDetail
-    elseif isTargetWindows then
-        return "visual-studio"
-    else
-        return os.target()
-    end 
-end
 
 --
 -- Next we will define a helper routine that all of our
@@ -474,13 +489,16 @@ example "clang-direct"
     }
     
     
-    -- Disable warnings that are a problem on LLVM/Clang on windows
+    
     filter { "toolset:msc-*" }
+        -- Disable warnings that are a problem on LLVM/Clang on windows
         disablewarnings { 
             "4141", "4146", "4244", "4267", "4291", "4351", "4456", "4457", "4458", "4459", "4503", "4624", "4722", 
             "4100", "4127", "4512", "4505", "4610", "4510", "4702", "4245", "4706", "4310", "4701", "4703", "4389", 
             "4611", "4805", "4204", "4577", "4091", "4592", "4319", "4709", "4324"
         } 
+        -- LLVM/Clang need this system library
+        links { "version" }
     
     filter { "configurations:debug" }    
         local libPath = path.join(llvmBuildPath, "Debug/lib")
@@ -525,7 +543,7 @@ standardProject("core", "external/slang/source/core")
     warnings "Extra"
     flags { "FatalWarnings" }
     
-    if isTargetWindows then
+    if isTargetWindows() then
         addSourceDir "external/slang/source/core/windows"
     else
         addSourceDir "external/slang/source/core/unix"
@@ -547,7 +565,7 @@ standardProject("compiler-core", "source/compiler-core")
     warnings "Extra"
     flags { "FatalWarnings" }    
     
-    if isTargetWindows then
+    if isTargetWindows() then
         addSourceDir "external/slang/source/compiler-core/windows"
     else
         addSourceDir "external/slang/source/compiler-core/unix"
