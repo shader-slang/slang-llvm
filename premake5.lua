@@ -37,6 +37,102 @@
 -- apply across all projects.
 --
 
+-- 
+-- Some globals needed by following functions
+--
+
+isTargetWindows = false
+
+function calcIsWindowsTarget(targetDetail)
+    return (os.target() == "windows") and not (targetDetail == "mingw" or targetDetail == "cygwin")
+end
+
+-- 
+-- Define some useful functions
+--
+
+function valueToString(o)
+    if type(o) == 'table' then
+        return tableToString(o)
+    else
+        return tostring(o)
+     end
+end
+    
+function tableToString(o)
+    local s = '{ '
+    for k,v in pairs(o) do
+        if type(k) ~= 'number' then k = '"'..k..'"' end
+        s = s .. '['..k..'] = ' .. tostring(v) .. ',\n'
+    end
+    return s .. '} '
+end
+
+function dump(o)
+    print(valueToString(o))
+end
+
+function getExecutableSuffix()
+    if(os.target() == "windows") then
+        return ".exe"
+    end
+    return ""
+end
+
+function trimPrefix(s, p)
+    local t = (s:sub(0, #p) == p) and s:sub(#p + 1) or s
+    return t
+end
+
+function findLibraries(basePath, inMatchName)
+    local matchName = inMatchName
+    if isTargetWindows then
+        matchName = inMatchName .. ".lib"
+    else
+        matchName = "lib" .. inMatchName .. ".*"
+    end
+ 
+    local matchPath = path.join(basePath, matchName)
+ 
+    local libs = os.matchfiles(matchPath)
+       
+    for k, v in ipairs(libs) do
+        -- Strip off path and extension
+        local libName = path.getbasename(v)
+        
+        if not isTargetWindows then
+            -- If the name starts with "lib" strip it
+            libName = trimPrefix(libName, "lib")
+        end
+    
+        libs[k] =  libName
+    end
+        
+    return libs
+end
+
+-- 
+-- Append (assuming 'array' table b onto a)
+--
+function appendTable(a, b)  
+    for _,v in ipairs(b) do 
+        table.insert(a, v)
+    end
+end
+
+--
+-- Given two (array) tables returns the concatination 
+--
+function concatTables(a, b)
+    a = table.table_copy(a)
+    appendTable(a, b)
+    return a
+end
+
+--
+-- Options
+--
+
 newoption {
    trigger     = "target-detail",
    description = "(Optional) More specific target information",
@@ -53,8 +149,25 @@ newoption {
 targetDetail = _OPTIONS["target-detail"]
 llvmPath = _OPTIONS["llvm-path"]
 
+if not llvmPath then
+    print("llvm-path option must be set")
+    os.exit(-1)
+end
+
+llvmBuildPath = llvmPath .. "/build"
+libPrefix = ""
+
 -- Is true when the target is really windows (ie not something on top of windows like cygwin)
-isTargetWindows = (os.target() == "windows") and not (targetDetail == "mingw" or targetDetail == "cygwin")
+isTargetWindows = calcIsWindowsTarget(targetDetail)
+
+if (isTargetWindows) then
+    llvmBuildPath = llvmPath .. "/build.vs"
+end
+
+if (not os.isdir(llvmPath) or not os.isdir(llvmBuildPath)) then
+    print("Need --llvm-path set to the directory root of LLVM project.")
+    os.exit(-1)
+end
 
 targetName = "%{cfg.system}-%{cfg.platform:lower()}"
 
@@ -141,34 +254,7 @@ workspace "slang-llvm"
     filter { "system:linux" }
         linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed", "-ldl"}
             
-function dump(o)
-    if type(o) == 'table' then
-        local s = '{ '
-        for k,v in pairs(o) do
-            if type(k) ~= 'number' then k = '"'..k..'"' end
-            s = s .. '['..k..'] = ' .. dump(v) .. ','
-        end
-        return s .. '} '
-    else
-        return tostring(o)
-     end
-end
-    
-function dumpTable(o)
-    local s = '{ '
-    for k,v in pairs(o) do
-        if type(k) ~= 'number' then k = '"'..k..'"' end
-        s = s .. '['..k..'] = ' .. tostring(v) .. ',\n'
-    end
-    return s .. '} '
-end
 
-function getExecutableSuffix()
-    if(os.target() == "windows") then
-        return ".exe"
-    end
-    return ""
-end
 --
 -- We are now going to start defining the projects, where
 -- each project builds some binary artifact (an executable,
@@ -370,15 +456,46 @@ end
 
 --
 -- With all of these helper routines defined, we can now define the
--- actual projects quite simply. For example, here is the entire
--- declaration of the "Hello, World" example project:
+-- actual projects quite simply. 
 --
 example "clang-direct"
     kind "ConsoleApp"
     
-    -- So we can access slang.h
-    includedirs {"external/slang", "external/slang/source"}
-
+    includedirs {
+        -- So we can access slang.h
+        "external/slang", 
+        -- For core/compiler-core
+        "external/slang/source", 
+        -- LLVM/Clang headers
+        path.join(llvmBuildPath, "tools/clang/include"), 
+        path.join(llvmBuildPath, "include"), 
+        path.join(llvmPath, "clang/include"), 
+        path.join(llvmPath, "llvm/include")
+    }
+    
+    
+    -- Disable warnings that are a problem on LLVM/Clang on windows
+    filter { "toolset:msc-*" }
+        disablewarnings { 
+            "4141", "4146", "4244", "4267", "4291", "4351", "4456", "4457", "4458", "4459", "4503", "4624", "4722", 
+            "4100", "4127", "4512", "4505", "4610", "4510", "4702", "4245", "4706", "4310", "4701", "4703", "4389", 
+            "4611", "4805", "4204", "4577", "4091", "4592", "4319", "4709", "4324"
+        } 
+    
+    filter { "configurations:debug" }    
+        local libPath = path.join(llvmBuildPath, "Debug/lib")
+        libdirs { libPath }
+        -- We need to vary this depending on type
+        links(findLibraries(libPath, "clang*"))
+        links(findLibraries(libPath,"LLVM*"))
+        
+    filter { "configurations:release" }    
+        local libPath = path.join(llvmBuildPath, "Release/lib")
+        libdirs { libPath }
+        -- We need to vary this depending on type
+        links(findLibraries(libPath, "clang*"))
+        links(findLibraries(libPath,"LLVM*"))
+    
     links { "core", "compiler-core" }
 
 -- Most of the other projects have more interesting configuration going
