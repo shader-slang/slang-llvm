@@ -27,7 +27,7 @@ NOTE! Currently LLVM is *NOT* a submodule, and has to be built locally from sour
 Limitiations
 ============
 
-* At the moment only contains a sample 'llvm-direct' that compiles from some source to object
+* At the moment only contains a sample 'clang-direct' that compiles from some source to object
 * Only works on Visual Studio
 
 Building LLVM/Clang
@@ -36,6 +36,14 @@ Building LLVM/Clang
 The follow the instructions for building on from source on windows. In additional to that the following need to be set
 
 The root of the project for CMAKE is actually the llvm directory in the `root` directory. Set the directory for the binaries to be `build.vs` in the `root` directory for windows. Currently the premake file assumes this name for the binaries/libs/built includes.
+
+We want a 64 bit environment it may be necessary to specify on command line
+
+```
+-Thost=x64
+```
+
+We want to try and force the use of the x64 linker (as the x86 linker fails)
 
 ```
 LLVM_ENABLE_PROJECTS            clang
