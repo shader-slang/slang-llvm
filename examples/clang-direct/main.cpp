@@ -36,6 +36,18 @@
 
 #include "llvm/Target/TargetMachine.h"
 
+// Jit
+#include "llvm/ExecutionEngine/JITEventListener.h"
+#include "llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h"
+
+#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
+#include "llvm/ExecutionEngine/Orc/LLJIT.h"
+
+#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
+
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IRReader/IRReader.h"
+
 // Slang
 
 #include <slang.h>
@@ -51,7 +63,10 @@
 namespace slang_clang {
 
 using namespace clang;
+
 using namespace llvm::opt;
+using namespace llvm;
+using namespace llvm::orc;
 
 static void _ensureSufficientStack() {}
 
@@ -111,8 +126,6 @@ static SlangResult _compile()
     _ensureSufficientStack();
 
     std::unique_ptr<CompilerInstance> clang(new CompilerInstance());
-
-
 
     IntrusiveRefCntPtr<DiagnosticIDs> diagID(new DiagnosticIDs());
 
@@ -175,10 +188,12 @@ static SlangResult _compile()
             opts.Inputs.push_back(inputFile);
         }
 
-        // This doesn't appear to actually emit anything
-        //opts.ProgramAction = frontend::ActionKind::EmitCodeGenOnly;
+        // EmitCodeGenOnly doesn't appear to actually emit anything
 
-        opts.ProgramAction = frontend::ActionKind::EmitObj;
+        opts.ProgramAction = frontend::ActionKind::EmitLLVM;
+
+        //opts.ProgramAction = frontend::ActionKind::EmitCodeGenOnly;
+        //opts.ProgramAction = frontend::ActionKind::EmitObj;
         //opts.ProgramAction = frontend::ActionKind::EmitAssembly;
     }
 
@@ -244,6 +259,14 @@ static SlangResult _compile()
         }
     }
 
+    // The compiled module is not in the module cache
+#if 0
+    {
+        InMemoryModuleCache& moduleCache = clang->getModuleCache();
+        SLANG_UNUSED(moduleCache);
+    }
+#endif
+
 #if 0
     {
         // Note that the FileManager can hold a virtual FileSystem.
@@ -256,6 +279,54 @@ static SlangResult _compile()
         //const ArgStringMap& getResultFiles() const { return ResultFiles; }
     }
 #endif
+
+    // If we emit LLVM it actually output LLVM assembly.
+    {
+        auto llvmContext = std::make_unique<LLVMContext>();
+
+        // Add zero termination
+        output.push_back(char(0));
+
+        StringRef data(output.begin(), output.size() - 1);
+        StringRef identifier;
+
+        MemoryBufferRef memoryBufferRef(data, identifier);
+        
+        //output.
+
+        SMDiagnostic err;
+        std::unique_ptr<llvm::Module> module = llvm::parseIR(memoryBufferRef, err, *llvmContext);
+
+        std::unique_ptr<llvm::orc::LLJIT> jit;
+        {
+            // Create the JIT
+            Expected<std::unique_ptr< llvm::orc::LLJIT>> expectJit = LLJITBuilder().create();
+            if (!expectJit)
+            {
+                return SLANG_FAIL;
+            }
+            jit = std::move(*expectJit); 
+        }
+
+        ThreadSafeModule threadSafeModule(std::move(module), std::move(llvmContext));
+
+        jit->addIRModule(std::move(threadSafeModule));
+
+        // Look up the JIT'd function, cast it to a function pointer, then call it.
+
+        auto addSymExpected = jit->lookup("add");
+        if (addSymExpected)
+        {
+            auto addSym = std::move(*addSymExpected);
+
+            typedef int (*AddFunc)(int, int);
+
+            AddFunc func = (AddFunc)addSym.getAddress();
+
+            int result = func(1, 3);
+
+        }
+    }
 
     return SLANG_OK;
 }
