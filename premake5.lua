@@ -94,7 +94,19 @@ function trimPrefix(s, p)
     return t
 end
 
-function findLibraries(basePath, inMatchName)
+--
+-- It turns out there are 'libraries' inside LLVM/Clang which are not 
+-- part of linking with clang, and example would be "clang-interpreter.lib"
+-- which if linked with will make clang-interpreter.exe a dependency.
+--
+-- This functions purpose is to determine if a library name is for a 'normal'
+-- clang library
+--
+function isClangLibraryName(name)
+    return not string.startswith(name, "clang-")
+end
+
+function findLibraries(basePath, inMatchName, matchFunc)
     local matchName = inMatchName
     if isTargetWindows() then
         matchName = inMatchName .. ".lib"
@@ -106,6 +118,8 @@ function findLibraries(basePath, inMatchName)
  
     local libs = os.matchfiles(matchPath)
        
+    local dstLibs = {}   
+       
     for k, v in ipairs(libs) do
         -- Strip off path and extension
         local libName = path.getbasename(v)
@@ -115,10 +129,12 @@ function findLibraries(basePath, inMatchName)
             libName = trimPrefix(libName, "lib")
         end
     
-        libs[k] =  libName
+        if matchFunc == nil or matchFunc(libName) then
+            table.insert(dstLibs, libName)
+        end
     end
         
-    return libs
+    return dstLibs
 end
 
 -- 
@@ -311,8 +327,6 @@ function addSourceDir(path)
     }
 end
 
---
-
 
 --
 -- Next we will define a helper routine that all of our
@@ -504,14 +518,14 @@ example "clang-direct"
         local libPath = path.join(llvmBuildPath, "Debug/lib")
         libdirs { libPath }
         -- We need to vary this depending on type
-        links(findLibraries(libPath, "clang*"))
+        links(findLibraries(libPath, "clang*", isClangLibraryName))
         links(findLibraries(libPath,"LLVM*"))
         
     filter { "configurations:release" }    
         local libPath = path.join(llvmBuildPath, "Release/lib")
         libdirs { libPath }
         -- We need to vary this depending on type
-        links(findLibraries(libPath, "clang*"))
+        links(findLibraries(libPath, "clang*", isClangLibraryName))
         links(findLibraries(libPath,"LLVM*"))
     
     links { "core", "compiler-core" }
