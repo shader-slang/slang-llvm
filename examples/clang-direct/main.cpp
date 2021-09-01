@@ -12,6 +12,10 @@
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
 #include "clang/FrontendTool/Utils.h"
+
+#include "clang/Frontend/FrontendAction.h"
+#include "clang/CodeGen/CodeGenAction.h"
+
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/LinkAllPasses.h"
@@ -29,8 +33,6 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/TimeProfiler.h"
 #include "llvm/Support/Timer.h"
-
-#include "clang/Frontend/FrontendAction.h"
 
 #include "llvm/Support/raw_ostream.h"
 
@@ -53,6 +55,9 @@
 #include <slang.h>
 #include <slang-com-helper.h>
 #include <slang-com-ptr.h>
+
+#include <core/slang-list.h>
+#include <core/slang-string.h>
 
 // Slang core
 
@@ -91,7 +96,7 @@ public:
     {
         DiagnosticsEngine::Level level;
         SourceLocation location;
-        std::string text;
+        Slang::String text;
     };
 
     void HandleDiagnostic(DiagnosticsEngine::Level level, const Diagnostic& info) override
@@ -103,22 +108,37 @@ public:
 
         entry.level = level;
         entry.location = info.getLocation();
-        entry.text = std::string(text.str());
+        entry.text = text.c_str();
 
         // Work out what the location is
         auto& sourceManager = info.getSourceManager();
 
+        // Gets the file/line number 
         const bool useLineDirectives = true;
         const PresumedLoc presumedLoc = sourceManager.getPresumedLoc(entry.location, useLineDirectives);
 
-
-        m_entries.push_back(entry);
+        m_entries.add(entry);
     }
 
-    std::vector<Entry> m_entries;
+    bool hasError() const
+    {
+        for (const auto& entry : m_entries)
+        {
+            if (entry.level == DiagnosticsEngine::Level::Fatal ||
+                entry.level == DiagnosticsEngine::Level::Error)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    Slang::List<Entry> m_entries;
 };
 
 static const char cppSource[] =
+    //"#include <math.h>\n"
     "int add(int a, int b) { return a + b; } int main() { return 0; }";
 
 static SlangResult _compile()
@@ -147,7 +167,6 @@ static SlangResult _compile()
     llvm::InitializeNativeTargetAsmParser();
 
     llvm::InitializeNativeTargetDisassembler();
-
 #endif
 
     IntrusiveRefCntPtr<DiagnosticOptions> diagOpts = new DiagnosticOptions();
@@ -165,14 +184,25 @@ static SlangResult _compile()
     std::string verboseOutputString;
 
     // Capture all of the verbose output into a buffer, so not writen to stdout
-    {
-        clang->setVerboseOutputStream(std::make_unique<llvm::raw_string_ostream>(verboseOutputString));
-    }
-
+    clang->setVerboseOutputStream(std::make_unique<llvm::raw_string_ostream>(verboseOutputString));
+    
     SmallVector<char> output;
-    {
-        clang->setOutputStream(std::make_unique<llvm::raw_svector_ostream>(output));
-    }
+    clang->setOutputStream(std::make_unique<llvm::raw_svector_ostream>(output));
+    
+    frontend::ActionKind action;
+
+    // EmitCodeGenOnly doesn't appear to actually emit anything
+    // EmitLLVM outputs LLVM assembly
+    // EmitLLVMOnly doesn't 'emit' anything, but the IR that is produced is accessible, from the 'action'.
+
+    action = frontend::ActionKind::EmitLLVMOnly;
+
+    //action = frontend::ActionKind::EmitBC;
+    //action = frontend::ActionKind::EmitLLVM;
+    // 
+    //action = frontend::ActionKind::EmitCodeGenOnly;
+    //action = frontend::ActionKind::EmitObj;
+    //action = frontend::ActionKind::EmitAssembly;
 
     {
         auto& opts = invocation.getFrontendOpts();
@@ -188,13 +218,18 @@ static SlangResult _compile()
             opts.Inputs.push_back(inputFile);
         }
 
-        // EmitCodeGenOnly doesn't appear to actually emit anything
+        opts.ProgramAction = action;
+    }
 
-        opts.ProgramAction = frontend::ActionKind::EmitLLVM;
+    {
+        auto& opts = invocation.getHeaderSearchOpts();
 
-        //opts.ProgramAction = frontend::ActionKind::EmitCodeGenOnly;
-        //opts.ProgramAction = frontend::ActionKind::EmitObj;
-        //opts.ProgramAction = frontend::ActionKind::EmitAssembly;
+        opts.UseBuiltinIncludes = true;
+        opts.UseStandardSystemIncludes = true;
+        opts.UseStandardCXXIncludes = true;
+
+        /// Use libc++ instead of the default libstdc++.
+        //opts.UseLibcxx = true;
     }
 
     llvm::Triple targetTriple;
@@ -242,61 +277,78 @@ static SlangResult _compile()
     // error handler.
     llvm::install_fatal_error_handler(_llvmErrorHandler, static_cast<void*>(&clang->getDiagnostics()));
 
-    // Looks like output files can be added via
-    // CompilerInstance::createOutputFileImpl/createOutputFile
-    // NOTE! That this writes files by just writing directly to the file system (ie it *doesn't* appear to use the virutal file system)
-    //
+    std::unique_ptr<LLVMContext> llvmContext = std::make_unique<LLVMContext>();
+
+    clang::CodeGenAction* codeGenAction = nullptr;
+    std::unique_ptr<FrontendAction> act;
+
     {
-        // Create and execute the frontend action.
-        std::unique_ptr<FrontendAction> act(CreateFrontendAction(*clang));
+        // If we are going to just emit IR, we need to have access to the underlying type
+        if (action == frontend::ActionKind::EmitLLVMOnly)
+        {
+            EmitLLVMOnlyAction* llvmOnlyAction = new EmitLLVMOnlyAction(llvmContext.get());
+            codeGenAction = llvmOnlyAction;
+            // Make act the owning ptr
+            act = std::unique_ptr<FrontendAction>(llvmOnlyAction);
+        }
+        else
+        {
+            act = CreateFrontendAction(*clang);
+        }
+
         if (!act)
-            return false;
+        {
+            return SLANG_FAIL;
+        }
+
         const bool compileSucceeded = clang->ExecuteAction(*act);
 
-        if (!compileSucceeded)
+        if (!compileSucceeded || diagsBuffer.hasError())
         {
             return SLANG_FAIL;
         }
     }
 
-    // The compiled module is not in the module cache
-#if 0
+    std::unique_ptr<llvm::Module> module;
+       
+    switch (action)
     {
-        InMemoryModuleCache& moduleCache = clang->getModuleCache();
-        SLANG_UNUSED(moduleCache);
+        case frontend::ActionKind::EmitLLVM:
+        {
+            
+            // LLVM output is text, that must be zero terminated
+            output.push_back(char(0));
+
+            StringRef identifier;
+            StringRef data(output.begin(), output.size() - 1);
+
+            MemoryBufferRef memoryBufferRef(data, identifier);
+
+            SMDiagnostic err;
+            module = llvm::parseIR(memoryBufferRef, err, *llvmContext);
+            break;
+        }
+        case frontend::ActionKind::EmitBC:
+        {
+            StringRef identifier;
+            StringRef data(output.begin(), output.size());
+
+            MemoryBufferRef memoryBufferRef(data, identifier);
+
+            SMDiagnostic err;
+            module = llvm::parseIR(memoryBufferRef, err, *llvmContext);
+            break;
+        }
+        case frontend::ActionKind::EmitLLVMOnly:
+        {
+            // Get the module produced by the action
+            module = codeGenAction->takeModule();
+            break;
+        }
     }
-#endif
 
-#if 0
+    // Try running something in the module on the JIT
     {
-        // Note that the FileManager can hold a virtual FileSystem.
-        // The FileManager is used for identifying unique files - for example if a file is specified by two paths, but is the 
-        // same (say by a symlink).
-
-        FileManager& fileManager = clang->getFileManager();
-
-        SLANG_UNUSED(fileManager);
-        //const ArgStringMap& getResultFiles() const { return ResultFiles; }
-    }
-#endif
-
-    // If we emit LLVM it actually output LLVM assembly.
-    {
-        auto llvmContext = std::make_unique<LLVMContext>();
-
-        // Add zero termination
-        output.push_back(char(0));
-
-        StringRef data(output.begin(), output.size() - 1);
-        StringRef identifier;
-
-        MemoryBufferRef memoryBufferRef(data, identifier);
-        
-        //output.
-
-        SMDiagnostic err;
-        std::unique_ptr<llvm::Module> module = llvm::parseIR(memoryBufferRef, err, *llvmContext);
-
         std::unique_ptr<llvm::orc::LLJIT> jit;
         {
             // Create the JIT
@@ -325,6 +377,7 @@ static SlangResult _compile()
 
             int result = func(1, 3);
 
+            SLANG_ASSERT(result == 4);
         }
     }
 
