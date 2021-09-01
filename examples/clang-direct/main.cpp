@@ -12,6 +12,10 @@
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
 #include "clang/FrontendTool/Utils.h"
+
+#include "clang/Frontend/FrontendAction.h"
+#include "clang/CodeGen/CodeGenAction.h"
+
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/LinkAllPasses.h"
@@ -29,8 +33,6 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/TimeProfiler.h"
 #include "llvm/Support/Timer.h"
-
-#include "clang/Frontend/FrontendAction.h"
 
 #include "llvm/Support/raw_ostream.h"
 
@@ -182,23 +184,22 @@ static SlangResult _compile()
     std::string verboseOutputString;
 
     // Capture all of the verbose output into a buffer, so not writen to stdout
-    {
-        clang->setVerboseOutputStream(std::make_unique<llvm::raw_string_ostream>(verboseOutputString));
-    }
-
+    clang->setVerboseOutputStream(std::make_unique<llvm::raw_string_ostream>(verboseOutputString));
+    
     SmallVector<char> output;
-    {
-        clang->setOutputStream(std::make_unique<llvm::raw_svector_ostream>(output));
-    }
-
+    clang->setOutputStream(std::make_unique<llvm::raw_svector_ostream>(output));
+    
     frontend::ActionKind action;
 
     // EmitCodeGenOnly doesn't appear to actually emit anything
     // EmitLLVM outputs LLVM assembly
+    // EmitLLVMOnly doesn't 'emit' anything, but the IR that is produced is accessible, from the 'action'.
 
-    action = frontend::ActionKind::EmitBC;
+    action = frontend::ActionKind::EmitLLVMOnly;
 
+    //action = frontend::ActionKind::EmitBC;
     //action = frontend::ActionKind::EmitLLVM;
+    // 
     //action = frontend::ActionKind::EmitCodeGenOnly;
     //action = frontend::ActionKind::EmitObj;
     //action = frontend::ActionKind::EmitAssembly;
@@ -218,6 +219,17 @@ static SlangResult _compile()
         }
 
         opts.ProgramAction = action;
+    }
+
+    {
+        auto& opts = invocation.getHeaderSearchOpts();
+
+        opts.UseBuiltinIncludes = true;
+        opts.UseStandardSystemIncludes = true;
+        opts.UseStandardCXXIncludes = true;
+
+        /// Use libc++ instead of the default libstdc++.
+        //opts.UseLibcxx = true;
     }
 
     llvm::Triple targetTriple;
@@ -265,15 +277,30 @@ static SlangResult _compile()
     // error handler.
     llvm::install_fatal_error_handler(_llvmErrorHandler, static_cast<void*>(&clang->getDiagnostics()));
 
-    // Looks like output files can be added via
-    // CompilerInstance::createOutputFileImpl/createOutputFile
-    // NOTE! That this writes files by just writing directly to the file system (ie it *doesn't* appear to use the virutal file system)
-    //
+    std::unique_ptr<LLVMContext> llvmContext = std::make_unique<LLVMContext>();
+
+    clang::CodeGenAction* codeGenAction = nullptr;
+    std::unique_ptr<FrontendAction> act;
+
     {
-        // Create and execute the frontend action.
-        std::unique_ptr<FrontendAction> act(CreateFrontendAction(*clang));
+        // If we are going to just emit IR, we need to have access to the underlying type
+        if (action == frontend::ActionKind::EmitLLVMOnly)
+        {
+            EmitLLVMOnlyAction* llvmOnlyAction = new EmitLLVMOnlyAction(llvmContext.get());
+            codeGenAction = llvmOnlyAction;
+            // Make act the owning ptr
+            act = std::unique_ptr<FrontendAction>(llvmOnlyAction);
+        }
+        else
+        {
+            act = CreateFrontendAction(*clang);
+        }
+
         if (!act)
-            return false;
+        {
+            return SLANG_FAIL;
+        }
+
         const bool compileSucceeded = clang->ExecuteAction(*act);
 
         if (!compileSucceeded || diagsBuffer.hasError())
@@ -282,53 +309,46 @@ static SlangResult _compile()
         }
     }
 
-    // The compiled module is not in the module cache
-#if 0
+    std::unique_ptr<llvm::Module> module;
+       
+    switch (action)
     {
-        InMemoryModuleCache& moduleCache = clang->getModuleCache();
-        SLANG_UNUSED(moduleCache);
-    }
-#endif
-
-#if 0
-    {
-        // Note that the FileManager can hold a virtual FileSystem.
-        // The FileManager is used for identifying unique files - for example if a file is specified by two paths, but is the 
-        // same (say by a symlink).
-
-        FileManager& fileManager = clang->getFileManager();
-
-        SLANG_UNUSED(fileManager);
-        //const ArgStringMap& getResultFiles() const { return ResultFiles; }
-    }
-#endif
-
-    // If we emit LLVM it actually output LLVM assembly.
-    {
-        auto llvmContext = std::make_unique<LLVMContext>();
-
-        StringRef data;
-        StringRef identifier;
-
-        if (action == frontend::ActionKind::EmitLLVM)
+        case frontend::ActionKind::EmitLLVM:
         {
-            // Add zero termination.
-            // LLVM output is text.
+            
+            // LLVM output is text, that must be zero terminated
             output.push_back(char(0));
-            data = StringRef(output.begin(), output.size() - 1);
+
+            StringRef identifier;
+            StringRef data(output.begin(), output.size() - 1);
+
+            MemoryBufferRef memoryBufferRef(data, identifier);
+
+            SMDiagnostic err;
+            module = llvm::parseIR(memoryBufferRef, err, *llvmContext);
+            break;
         }
-        else
+        case frontend::ActionKind::EmitBC:
         {
-            data = StringRef(output.begin(), output.size());
+            StringRef identifier;
+            StringRef data(output.begin(), output.size());
+
+            MemoryBufferRef memoryBufferRef(data, identifier);
+
+            SMDiagnostic err;
+            module = llvm::parseIR(memoryBufferRef, err, *llvmContext);
+            break;
         }
+        case frontend::ActionKind::EmitLLVMOnly:
+        {
+            // Get the module produced by the action
+            module = codeGenAction->takeModule();
+            break;
+        }
+    }
 
-        MemoryBufferRef memoryBufferRef(data, identifier);
-        
-        //output.
-
-        SMDiagnostic err;
-        std::unique_ptr<llvm::Module> module = llvm::parseIR(memoryBufferRef, err, *llvmContext);
-
+    // Try running something in the module on the JIT
+    {
         std::unique_ptr<llvm::orc::LLJIT> jit;
         {
             // Create the JIT
@@ -357,6 +377,7 @@ static SlangResult _compile()
 
             int result = func(1, 3);
 
+            SLANG_ASSERT(result == 4);
         }
     }
 
