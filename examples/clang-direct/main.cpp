@@ -54,6 +54,9 @@
 #include <slang-com-helper.h>
 #include <slang-com-ptr.h>
 
+#include <core/slang-list.h>
+#include <core/slang-string.h>
+
 // Slang core
 
 #include <core/slang-string.h>
@@ -91,7 +94,7 @@ public:
     {
         DiagnosticsEngine::Level level;
         SourceLocation location;
-        std::string text;
+        Slang::String text;
     };
 
     void HandleDiagnostic(DiagnosticsEngine::Level level, const Diagnostic& info) override
@@ -103,22 +106,37 @@ public:
 
         entry.level = level;
         entry.location = info.getLocation();
-        entry.text = std::string(text.str());
+        entry.text = text.c_str();
 
         // Work out what the location is
         auto& sourceManager = info.getSourceManager();
 
+        // Gets the file/line number 
         const bool useLineDirectives = true;
         const PresumedLoc presumedLoc = sourceManager.getPresumedLoc(entry.location, useLineDirectives);
 
-
-        m_entries.push_back(entry);
+        m_entries.add(entry);
     }
 
-    std::vector<Entry> m_entries;
+    bool hasError() const
+    {
+        for (const auto& entry : m_entries)
+        {
+            if (entry.level == DiagnosticsEngine::Level::Fatal ||
+                entry.level == DiagnosticsEngine::Level::Error)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    Slang::List<Entry> m_entries;
 };
 
 static const char cppSource[] =
+    //"#include <math.h>\n"
     "int add(int a, int b) { return a + b; } int main() { return 0; }";
 
 static SlangResult _compile()
@@ -147,7 +165,6 @@ static SlangResult _compile()
     llvm::InitializeNativeTargetAsmParser();
 
     llvm::InitializeNativeTargetDisassembler();
-
 #endif
 
     IntrusiveRefCntPtr<DiagnosticOptions> diagOpts = new DiagnosticOptions();
@@ -174,6 +191,18 @@ static SlangResult _compile()
         clang->setOutputStream(std::make_unique<llvm::raw_svector_ostream>(output));
     }
 
+    frontend::ActionKind action;
+
+    // EmitCodeGenOnly doesn't appear to actually emit anything
+    // EmitLLVM outputs LLVM assembly
+
+    action = frontend::ActionKind::EmitBC;
+
+    //action = frontend::ActionKind::EmitLLVM;
+    //action = frontend::ActionKind::EmitCodeGenOnly;
+    //action = frontend::ActionKind::EmitObj;
+    //action = frontend::ActionKind::EmitAssembly;
+
     {
         auto& opts = invocation.getFrontendOpts();
 
@@ -188,13 +217,7 @@ static SlangResult _compile()
             opts.Inputs.push_back(inputFile);
         }
 
-        // EmitCodeGenOnly doesn't appear to actually emit anything
-
-        opts.ProgramAction = frontend::ActionKind::EmitLLVM;
-
-        //opts.ProgramAction = frontend::ActionKind::EmitCodeGenOnly;
-        //opts.ProgramAction = frontend::ActionKind::EmitObj;
-        //opts.ProgramAction = frontend::ActionKind::EmitAssembly;
+        opts.ProgramAction = action;
     }
 
     llvm::Triple targetTriple;
@@ -253,7 +276,7 @@ static SlangResult _compile()
             return false;
         const bool compileSucceeded = clang->ExecuteAction(*act);
 
-        if (!compileSucceeded)
+        if (!compileSucceeded || diagsBuffer.hasError())
         {
             return SLANG_FAIL;
         }
@@ -284,11 +307,20 @@ static SlangResult _compile()
     {
         auto llvmContext = std::make_unique<LLVMContext>();
 
-        // Add zero termination
-        output.push_back(char(0));
-
-        StringRef data(output.begin(), output.size() - 1);
+        StringRef data;
         StringRef identifier;
+
+        if (action == frontend::ActionKind::EmitLLVM)
+        {
+            // Add zero termination.
+            // LLVM output is text.
+            output.push_back(char(0));
+            data = StringRef(output.begin(), output.size() - 1);
+        }
+        else
+        {
+            data = StringRef(output.begin(), output.size());
+        }
 
         MemoryBufferRef memoryBufferRef(data, identifier);
         
