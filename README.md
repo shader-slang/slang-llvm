@@ -39,6 +39,8 @@ The root of the project for CMAKE is actually the llvm directory in the `root` d
 
 We want a 64 bit environment it may be necessary to specify on command line
 
+(From)[https://clang.llvm.org/get_started.html], more details on the (options)[https://www.llvm.org/docs/CMake.html]
+
 ```
 -Thost=x64
 ```
