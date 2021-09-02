@@ -15,6 +15,7 @@
 
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/CodeGen/CodeGenAction.h"
+#include "clang/Basic/Version.h"
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Config/llvm-config.h"
@@ -47,6 +48,8 @@
 
 #include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
 
+#include "llvm/ExecutionEngine/JITSymbol.h"
+
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IRReader/IRReader.h"
 
@@ -64,6 +67,9 @@
 #include <core/slang-string.h>
 
 #include <stdio.h>
+
+// We want to make math functions available to the JIT
+#include <math.h>
 
 namespace slang_clang {
 
@@ -137,16 +143,31 @@ public:
     Slang::List<Entry> m_entries;
 };
 
+
 static const char cppSource[] =
     //"#include <math.h>\n"
+
+    "extern double sin(double); "
+
+    "double doSin(double f) { return sin(f); }\n"
     "int add(int a, int b) { return a + b; } int main() { return 0; }";
+
+
+struct NameAndFunc
+{
+    typedef void (*Func)();
+
+    const char* name;
+    Func func;
+};
+
+#define SLANG_LLVM_FUNC(name, retType, paramTypes) NameAndFunc{ #name, (NameAndFunc::Func)static_cast<retType (*) paramTypes>(&name) }
 
 static SlangResult _compile()
 {
     _ensureSufficientStack();
 
     std::unique_ptr<CompilerInstance> clang(new CompilerInstance());
-
     IntrusiveRefCntPtr<DiagnosticIDs> diagID(new DiagnosticIDs());
 
     // Register the support for object-file-wrapped Clang modules.
@@ -161,6 +182,7 @@ static SlangResult _compile()
     llvm::InitializeAllAsmPrinters();
     llvm::InitializeAllAsmParsers();
 #else
+    // Just initialize items needed for this target.
 
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -189,16 +211,16 @@ static SlangResult _compile()
     SmallVector<char> output;
     clang->setOutputStream(std::make_unique<llvm::raw_svector_ostream>(output));
     
-    frontend::ActionKind action;
+    frontend::ActionKind action = frontend::ActionKind::EmitLLVMOnly;
 
     // EmitCodeGenOnly doesn't appear to actually emit anything
     // EmitLLVM outputs LLVM assembly
     // EmitLLVMOnly doesn't 'emit' anything, but the IR that is produced is accessible, from the 'action'.
 
-    action = frontend::ActionKind::EmitLLVMOnly;
+    //action = frontend::ActionKind::EmitLLVMOnly;
 
     //action = frontend::ActionKind::EmitBC;
-    //action = frontend::ActionKind::EmitLLVM;
+    action = frontend::ActionKind::EmitLLVM;
     // 
     //action = frontend::ActionKind::EmitCodeGenOnly;
     //action = frontend::ActionKind::EmitObj;
@@ -229,7 +251,7 @@ static SlangResult _compile()
         opts.UseStandardCXXIncludes = true;
 
         /// Use libc++ instead of the default libstdc++.
-        //opts.UseLibcxx = true;
+        opts.UseLibcxx = true;
     }
 
     llvm::Triple targetTriple;
@@ -257,12 +279,29 @@ static SlangResult _compile()
     //const llvm::opt::OptTable& opts = clang::driver::getDriverOptTable();
 
     // TODO(JS): Need a way to find in system search paths, for now we just don't bother
+    //
+    // The system search paths are for includes for compiler intrinsics it seems. 
     // Infer the builtin include path if unspecified.
     {
         auto& searchOpts = clang->getHeaderSearchOpts();
         if (searchOpts.UseBuiltinIncludes && searchOpts.ResourceDir.empty())
         {
-            // searchOpts.ResourceDir = CompilerInvocation::GetResourcesPath(Argv0, MainAddr);
+            // TODO(JS): Hack - hard coded path such that we can test out the
+            // resource directory functionality.
+
+            StringRef binaryPath = "F:/dev/llvm-12.0/llvm-project-llvmorg-12.0.1/build.vs/Release/bin";
+
+            // Dir is bin/ or lib/, depending on where BinaryPath is.
+
+            // On Windows, libclang.dll is in bin/.
+            // On non-Windows, libclang.so/.dylib is in lib/.
+            // With a static-library build of libclang, LibClangPath will contain the
+            // path of the embedding binary, which for LLVM binaries will be in bin/.
+            // ../lib gets us to lib/ in both cases.
+            SmallString<128> path = llvm::sys::path::parent_path(binaryPath);
+            llvm::sys::path::append(path, Twine("lib") + CLANG_LIBDIR_SUFFIX, "clang", CLANG_VERSION_STRING);
+        
+            searchOpts.ResourceDir = path.c_str();
         }
     }
 
@@ -272,6 +311,10 @@ static SlangResult _compile()
 
     if (!clang->hasDiagnostics())
         return SLANG_FAIL;
+
+    //
+    clang->createFileManager();
+    clang->createSourceManager(clang->getFileManager());
 
     // Set an error handler, so that any LLVM backend diagnostics go through our
     // error handler.
@@ -352,12 +395,59 @@ static SlangResult _compile()
         std::unique_ptr<llvm::orc::LLJIT> jit;
         {
             // Create the JIT
-            Expected<std::unique_ptr< llvm::orc::LLJIT>> expectJit = LLJITBuilder().create();
+
+            LLJITBuilder jitBuilder;
+
+            Expected<std::unique_ptr< llvm::orc::LLJIT>> expectJit = jitBuilder.create();
             if (!expectJit)
             {
                 return SLANG_FAIL;
             }
             jit = std::move(*expectJit); 
+        }
+
+        // Used the following link to test this out
+        // https://www.llvm.org/docs/ORCv2.html
+        // https://www.llvm.org/docs/ORCv2.html#processandlibrarysymbols
+
+        {
+            auto& es = jit->getExecutionSession();
+
+            const DataLayout& dl = jit->getDataLayout();
+            MangleAndInterner mangler(es, dl);
+
+            // The name of the lib must be unique. Should be here as we are only thing adding libs
+            auto& stdcLibExpected = es.createJITDylib("stdc");
+
+            if (stdcLibExpected)
+            {
+                auto& stdcLib = *stdcLibExpected;
+
+                // Add all the symbolmap
+                SymbolMap symbolMap;
+
+                //symbolMap.insert(std::make_pair(mangler("sin"), JITEvaluatedSymbol::fromPointer(static_cast<double (*)(double)>(&sin))));
+
+                const NameAndFunc funcs[] =
+                {
+                    SLANG_LLVM_FUNC(sin, double, (double)),
+                    SLANG_LLVM_FUNC(cos, double, (double)),
+                    SLANG_LLVM_FUNC(tan, double, (double)),
+                };
+
+                for (auto& func : funcs)
+                {
+                    symbolMap.insert(std::make_pair(mangler(func.name), JITEvaluatedSymbol::fromPointer(func.func)));
+                }
+
+                stdcLib.define(absoluteSymbols(symbolMap));
+
+                jit->getMainJITDylib().addToLinkOrder(stdcLib);
+
+                // Not clear how to add to link order?
+                //            MainJD.addToLinkOrder(&LibA);
+
+            }
         }
 
         ThreadSafeModule threadSafeModule(std::move(module), std::move(llvmContext));
@@ -366,18 +456,28 @@ static SlangResult _compile()
 
         // Look up the JIT'd function, cast it to a function pointer, then call it.
 
-        auto addSymExpected = jit->lookup("add");
-        if (addSymExpected)
+        auto addExpected = jit->lookup("add");
+        if (addExpected)
         {
-            auto addSym = std::move(*addSymExpected);
+            auto add = std::move(*addExpected);
+            typedef int (*Func)(int, int);
 
-            typedef int (*AddFunc)(int, int);
-
-            AddFunc func = (AddFunc)addSym.getAddress();
-
+            Func func = (Func)add.getAddress();
             int result = func(1, 3);
 
             SLANG_ASSERT(result == 4);
+        }
+
+        auto doSinExpected = jit->lookup("doSin");
+        if (doSinExpected)
+        {
+            auto doSin = std::move(*doSinExpected);
+            typedef double (*Func)(double);
+            Func func = (Func)doSin.getAddress();
+
+            double result = func(0.5);
+
+            SLANG_ASSERT(result == ::sin(0.5));
         }
     }
 
