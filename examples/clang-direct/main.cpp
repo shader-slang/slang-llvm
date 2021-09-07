@@ -62,6 +62,7 @@
 #include <core/slang-list.h>
 #include <core/slang-string.h>
 
+
 // Slang core
 
 #include <core/slang-string.h>
@@ -69,7 +70,13 @@
 #include <stdio.h>
 
 // We want to make math functions available to the JIT
-#include <math.h>
+#if SLANG_GCC_FAMILY && __GNUC__ < 6
+#   include <cmath>
+#   define SLANG_PRELUDE_STD std::
+#else
+#   include <math.h>
+#   define SLANG_PRELUDE_STD
+#endif
 
 namespace slang_clang {
 
@@ -143,15 +150,22 @@ public:
     Slang::List<Entry> m_entries;
 };
 
+/*
+* If I define all the functions in such a way that I can test here, then that might be handy. Actually doing that
+* means I don't have to put anything inside of the prelude, because I could just generate code to add the prototypes.
+*/
 
-static const char cppSource[] =
-    //"#include <math.h>\n"
 
-    "extern double sin(double); "
 
-    "double doSin(double f) { return sin(f); }\n"
-    "int add(int a, int b) { return a + b; } int main() { return 0; }";
-
+/*
+* So a question is how to make the prototypes available for these functions. They would need to be defined before the
+* the prelude - or potentially in the prelude.
+*
+* That I could have a define that handled this in the prelude - such as SLANG_LLVM_JIT (say), and in doing so remove
+* the whole definition issue.
+*
+* Note that inside this file - we do need to have the special handling to be able to access said functions. 
+*/
 
 struct NameAndFunc
 {
@@ -161,7 +175,114 @@ struct NameAndFunc
     Func func;
 };
 
-#define SLANG_LLVM_FUNC(name, retType, paramTypes) NameAndFunc{ #name, (NameAndFunc::Func)static_cast<retType (*) paramTypes>(&name) }
+#define SLANG_LLVM_EXPAND(x) x
+
+#define SLANG_LLVM_FUNC(name, cppName, retType, paramTypes) NameAndFunc{ #name, (NameAndFunc::Func)static_cast<retType (*) paramTypes>(&SLANG_LLVM_EXPAND(cppName)) },
+
+// Implementations of maths functions available to JIT
+static float F32_frexp(float x, float* e)
+{
+    int ei;
+    float m = ::frexpf(x, &ei);
+    *e = float(ei);
+    return m;
+}
+
+static double F64_frexp(double x, double* e)
+{
+    int ei;
+    double m = ::frexp(x, &ei);
+    *e = float(ei);
+    return m;
+}
+
+// These are only the functions that cannot be implemented with 'reasonable performance' in the prelude.
+// It is assumed that calling from JIT to C function whilst not super expensive, is an issue. 
+
+// name, cppName, retType, paramTypes
+#define SLANG_LLVM_FUNCS(x) \
+    x(F64_ceil, ceil, double, (double)) \
+    x(F64_floor, floor, double, (double)) \
+    x(F64_round, round, double, (double)) \
+    x(F64_sin, sin, double, (double)) \
+    x(F64_cos, cos, double, (double)) \
+    x(F64_tan, tan, double, (double)) \
+    x(F64_asin, asin, double, (double)) \
+    x(F64_acos, acos, double, (double)) \
+    x(F64_atan, atan, double, (double)) \
+    x(F64_sinh, sinh, double, (double)) \
+    x(F64_cosh, cosh, double, (double)) \
+    x(F64_tanh, tanh, double, (double)) \
+    x(F64_log2, log2, double, (double)) \
+    x(F64_log, log, double, (double)) \
+    x(F64_log10, log10, double, (double)) \
+    x(F64_exp2, exp2, double, (double)) \
+    x(F64_exp, exp, double, (double)) \
+    x(F64_fabs, fabs, double, (double)) \
+    x(F64_trunc, trunc, double, (double)) \
+    x(F64_sqrt, sqrt, double, (double)) \
+    \
+    x(F64_isnan, SLANG_PRELUDE_STD isnan, bool, (double)) \
+    x(F64_isfinite, SLANG_PRELUDE_STD isfinite, bool, (double)) \
+    x(F64_isinf, SLANG_PRELUDE_STD isinf, bool, (double)) \
+    \
+    x(F64_atan2, atan2, double, (double, double)) \
+    \
+    x(F64_frexp, F64_frexp, double, (double, double*)) \
+    x(F64_pow, pow, double, (double, double)) \
+    \
+    x(F64_modf, modf, double, (double, double*)) \
+    x(F64_fmod, fmod, double, (double, double)) \
+    x(F64_remainder, remainder, double, (double, double)) \
+    \
+    x(F32_ceil, ceilf, float, (float)) \
+    x(F32_floor, floorf, float, (float)) \
+    x(F32_round, roundf, float, (float)) \
+    x(F32_sin, sinf, float, (float)) \
+    x(F32_cos, cosf, float, (float)) \
+    x(F32_tan, tanf, float, (float)) \
+    x(F32_asin, asinf, float, (float)) \
+    x(F32_acos, acosf, float, (float)) \
+    x(F32_atan, atanf, float, (float)) \
+    x(F32_sinh, sinhf, float, (float)) \
+    x(F32_cosh, coshf, float, (float)) \
+    x(F32_tanh, tanhf, float, (float)) \
+    x(F32_log2, log2f, float, (float)) \
+    x(F32_log, logf, float, (float)) \
+    x(F32_log10, log10f, float, (float)) \
+    x(F32_exp2, exp2f, float, (float)) \
+    x(F32_exp, expf, float, (float)) \
+    x(F32_fabs, fabsf, float, (float)) \
+    x(F32_trunc, truncf, float, (float)) \
+    x(F32_sqrt, sqrtf, float, (float)) \
+    \
+    x(F32_isnan, SLANG_PRELUDE_STD isnan, bool, (float)) \
+    x(F32_isfinite, SLANG_PRELUDE_STD isfinite, bool, (float)) \
+    x(F32_isinf, SLANG_PRELUDE_STD isinf, bool, (float)) \
+    \
+    x(F32_atan2, atan2f, float, (float, float)) \
+    \
+    x(F32_frexp, F32_frexp, float, (float, float*)) \
+    x(F32_pow, powf, float, (float, float)) \
+    \
+    x(F32_modf, modff, float, (float, float*)) \
+    x(F32_fmod, fmodf, float, (float, float)) \
+    x(F32_remainder, remainderf, float, (float, float)) 
+
+static void _appendBuiltinPrototypes(Slang::StringBuilder& out)
+{
+    // Make all function names unmangled that are implemented externally.
+    out << "extern \"C\" { \n";
+
+#define SLANG_LLVM_APPEND_PROTOTYPE(name, cppName, retType, paramTypes)     out << #retType << " " << #name << #paramTypes << ";\n";
+    SLANG_LLVM_FUNCS(SLANG_LLVM_APPEND_PROTOTYPE)
+
+    out << "}\n\n";
+}
+
+static const char cppSource[] =
+    "extern \"C\" double doSin(double f) { return F64_sin(f); }\n"
+    "extern \"C\" int add(int a, int b) { return a + b; } int main() { return 0; }";
 
 static SlangResult _compile()
 {
@@ -199,7 +320,14 @@ static SlangResult _compile()
 
     IntrusiveRefCntPtr<DiagnosticsEngine> diags = new DiagnosticsEngine(diagID, diagOpts, &diagsBuffer, false);
 
-    auto sourceBuffer = llvm::MemoryBuffer::getMemBuffer(cppSource);
+    Slang::StringBuilder source;
+    _appendBuiltinPrototypes(source);
+    source << "\n\n";
+    source << cppSource;
+
+    StringRef sourceStringRef(source.getBuffer(), source.getLength());
+
+    auto sourceBuffer = llvm::MemoryBuffer::getMemBuffer(sourceStringRef);
 
     auto& invocation = clang->getInvocation();
 
@@ -217,10 +345,10 @@ static SlangResult _compile()
     // EmitLLVM outputs LLVM assembly
     // EmitLLVMOnly doesn't 'emit' anything, but the IR that is produced is accessible, from the 'action'.
 
-    //action = frontend::ActionKind::EmitLLVMOnly;
+    action = frontend::ActionKind::EmitLLVMOnly;
 
     //action = frontend::ActionKind::EmitBC;
-    action = frontend::ActionKind::EmitLLVM;
+    //action = frontend::ActionKind::EmitLLVM;
     // 
     //action = frontend::ActionKind::EmitCodeGenOnly;
     //action = frontend::ActionKind::EmitObj;
@@ -241,6 +369,13 @@ static SlangResult _compile()
         }
 
         opts.ProgramAction = action;
+    }
+
+    {
+        auto opts = invocation.getLangOpts();
+        opts->Bool = 1;
+        opts->CPlusPlus = 1;
+        opts->LangStd = LangStandard::Kind::lang_cxx11;
     }
 
     {
@@ -282,6 +417,7 @@ static SlangResult _compile()
     //
     // The system search paths are for includes for compiler intrinsics it seems. 
     // Infer the builtin include path if unspecified.
+#if 0
     {
         auto& searchOpts = clang->getHeaderSearchOpts();
         if (searchOpts.UseBuiltinIncludes && searchOpts.ResourceDir.empty())
@@ -304,6 +440,7 @@ static SlangResult _compile()
             searchOpts.ResourceDir = path.c_str();
         }
     }
+#endif
 
     // Create the actual diagnostics engine.
     clang->createDiagnostics();
@@ -430,9 +567,7 @@ static SlangResult _compile()
 
                 const NameAndFunc funcs[] =
                 {
-                    SLANG_LLVM_FUNC(sin, double, (double)),
-                    SLANG_LLVM_FUNC(cos, double, (double)),
-                    SLANG_LLVM_FUNC(tan, double, (double)),
+                    SLANG_LLVM_FUNCS(SLANG_LLVM_FUNC)
                 };
 
                 for (auto& func : funcs)
@@ -442,11 +577,8 @@ static SlangResult _compile()
 
                 stdcLib.define(absoluteSymbols(symbolMap));
 
+                // Required or the symbols won't be found
                 jit->getMainJITDylib().addToLinkOrder(stdcLib);
-
-                // Not clear how to add to link order?
-                //            MainJD.addToLinkOrder(&LibA);
-
             }
         }
 
