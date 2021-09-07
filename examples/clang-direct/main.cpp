@@ -62,20 +62,15 @@
 #include <core/slang-list.h>
 #include <core/slang-string.h>
 
-
-// Slang core
-
-#include <core/slang-string.h>
-
 #include <stdio.h>
 
 // We want to make math functions available to the JIT
 #if SLANG_GCC_FAMILY && __GNUC__ < 6
 #   include <cmath>
-#   define SLANG_PRELUDE_STD std::
+#   define SLANG_LLVM_STD std::
 #else
 #   include <math.h>
-#   define SLANG_PRELUDE_STD
+#   define SLANG_LLVM_STD
 #endif
 
 namespace slang_clang {
@@ -151,20 +146,11 @@ public:
 };
 
 /*
-* If I define all the functions in such a way that I can test here, then that might be handy. Actually doing that
-* means I don't have to put anything inside of the prelude, because I could just generate code to add the prototypes.
-*/
-
-
-
-/*
-* So a question is how to make the prototypes available for these functions. They would need to be defined before the
+* A question is how to make the prototypes available for these functions. They would need to be defined before the
 * the prelude - or potentially in the prelude.
 *
-* That I could have a define that handled this in the prelude - such as SLANG_LLVM_JIT (say), and in doing so remove
-* the whole definition issue.
-*
-* Note that inside this file - we do need to have the special handling to be able to access said functions. 
+* I could just define the prototypes in the prelude, and only impl, if needed. Here though I require that all the functions
+* implemented here, use C style names (ie unmanagled) to simplify lookup.
 */
 
 struct NameAndFunc
@@ -222,9 +208,9 @@ static double F64_frexp(double x, double* e)
     x(F64_trunc, trunc, double, (double)) \
     x(F64_sqrt, sqrt, double, (double)) \
     \
-    x(F64_isnan, SLANG_PRELUDE_STD isnan, bool, (double)) \
-    x(F64_isfinite, SLANG_PRELUDE_STD isfinite, bool, (double)) \
-    x(F64_isinf, SLANG_PRELUDE_STD isinf, bool, (double)) \
+    x(F64_isnan, SLANG_LLVM_STD isnan, bool, (double)) \
+    x(F64_isfinite, SLANG_LLVM_STD isfinite, bool, (double)) \
+    x(F64_isinf, SLANG_LLVM_STD isinf, bool, (double)) \
     \
     x(F64_atan2, atan2, double, (double, double)) \
     \
@@ -256,9 +242,9 @@ static double F64_frexp(double x, double* e)
     x(F32_trunc, truncf, float, (float)) \
     x(F32_sqrt, sqrtf, float, (float)) \
     \
-    x(F32_isnan, SLANG_PRELUDE_STD isnan, bool, (float)) \
-    x(F32_isfinite, SLANG_PRELUDE_STD isfinite, bool, (float)) \
-    x(F32_isinf, SLANG_PRELUDE_STD isinf, bool, (float)) \
+    x(F32_isnan, SLANG_LLVM_STD isnan, bool, (float)) \
+    x(F32_isfinite, SLANG_LLVM_STD isfinite, bool, (float)) \
+    x(F32_isinf, SLANG_LLVM_STD isinf, bool, (float)) \
     \
     x(F32_atan2, atan2f, float, (float, float)) \
     \
