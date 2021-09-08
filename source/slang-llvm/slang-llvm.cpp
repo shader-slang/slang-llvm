@@ -13,6 +13,8 @@
 #include "clang/Frontend/Utils.h"
 #include "clang/FrontendTool/Utils.h"
 
+#include "clang/Lex/PreprocessorOptions.h"
+
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/CodeGen/CodeGenAction.h"
 #include "clang/Basic/Version.h"
@@ -120,7 +122,7 @@ public:
     typedef DownstreamCompileResult Super;
 
     // ISlangUnknown
-    virtual SLANG_NO_THROW SlangResult SLANG_MCALL queryInterface(SlangUUID const& uuid, void** outObject) SLANG_OVERRIDE;
+    SLANG_REF_OBJECT_IUNKNOWN_QUERY_INTERFACE
     SLANG_REF_OBJECT_IUNKNOWN_ADD_REF
     SLANG_REF_OBJECT_IUNKNOWN_RELEASE
 
@@ -153,6 +155,12 @@ SLANG_NO_THROW void* SLANG_MCALL LLVMDownstreamCompileResult::findSymbolAddressB
         return (void*)fn.getAddress();
     }
     return nullptr;
+}
+
+SlangResult LLVMDownstreamCompileResult::getHostCallableSharedLibrary(ComPtr<ISlangSharedLibrary>& outLibrary)
+{
+    outLibrary = this;
+    return SLANG_OK;
 }
 
 ISlangUnknown* LLVMDownstreamCompileResult::getInterface(const Guid& guid)
@@ -465,6 +473,27 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         }
 
         opts.ProgramAction = action;
+    }
+
+    {
+        auto& opts = invocation.getPreprocessorOpts();
+
+        // Add definition so that 'LLVM/Clang' compilations can be recognized
+        opts.addMacroDef("SLANG_LLVM");
+
+        for (const auto& define : options.defines)
+        {
+            const Index index = define.nameWithSig.indexOf('(');
+            if (index >= 0)
+            {
+                // Interface does not support having a signature.
+                return SLANG_E_NOT_AVAILABLE;
+            }
+
+            // TODO(JS): NOTE! The options do not support setting a *value* just that a macro is defined.
+            // So strictly speaking, we should probably have a warning/error if the value is not appropriate
+            opts.addMacroDef(define.nameWithSig.getBuffer());
+        }
     }
 
     {
