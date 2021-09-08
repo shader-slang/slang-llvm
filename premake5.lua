@@ -192,6 +192,9 @@ newoption {
 targetDetail = _OPTIONS["target-detail"]
 llvmPath = _OPTIONS["llvm-path"]
 
+--slangPath = "external/slang"
+slangPath = "E:/git/slang-jsmall-nvidia"
+
 if not llvmPath then
     print("llvm-path option must be set")
     os.exit(-1)
@@ -224,6 +227,17 @@ if getTargetDetail() == "cygwin" then
     buildoptions { "-D_POSIX_SOURCE" }
     filter { "toolset:gcc*" }
         buildoptions { "-D_GNU_SOURCE" }
+end
+
+-- 
+disableWarningsList = {}
+
+if isTargetWindows() then
+    disableWarningsList = { "4141", "4146", "4244", "4267", "4291", "4351", "4456", "4457", "4458", "4459", "4503", "4624", "4722", 
+            "4100", "4127", "4512", "4505", "4610", "4510", "4702", "4245", "4706", "4310", "4701", "4703", "4389", 
+            "4611", "4805", "4204", "4577", "4091", "4592", "4319", "4709", "4324",
+            "4996" }
+else
 end
 
 workspace "slang-llvm"
@@ -483,6 +497,8 @@ function example(name)
     links { "core"  }
 end
 
+
+
 --
 -- With all of these helper routines defined, we can now define the
 -- actual projects quite simply. 
@@ -492,9 +508,9 @@ example "clang-direct"
     
     includedirs {
         -- So we can access slang.h
-        "external/slang", 
+        slangPath, 
         -- For core/compiler-core
-        "external/slang/source", 
+        path.join(slangPath, "source"), 
         -- LLVM/Clang headers
         path.join(llvmBuildPath, "tools/clang/include"), 
         path.join(llvmBuildPath, "include"), 
@@ -502,15 +518,10 @@ example "clang-direct"
         path.join(llvmPath, "llvm/include")
     }
     
-    
-    
     filter { "toolset:msc-*" }
         -- Disable warnings that are a problem on LLVM/Clang on windows
-        disablewarnings { 
-            "4141", "4146", "4244", "4267", "4291", "4351", "4456", "4457", "4458", "4459", "4503", "4624", "4722", 
-            "4100", "4127", "4512", "4505", "4610", "4510", "4702", "4245", "4706", "4310", "4701", "4703", "4389", 
-            "4611", "4805", "4204", "4577", "4091", "4592", "4319", "4709", "4324"
-        } 
+        disablewarnings(disableWarningsList)
+
         -- LLVM/Clang need this system library
         links { "version" }
     
@@ -538,16 +549,18 @@ example "clang-direct"
 -- and the various tool projects. It's build is pretty simple:
 --
 
-standardProject("core", "external/slang/source/core")
+standardProject("core", path.join(slangPath, "source/core"))
     uuid "F9BE7957-8399-899E-0C49-E714FDDD4B65"
     kind "StaticLib"
     -- We need the core library to be relocatable to be able to link with slang.so
     pic "On"
 
-    removefiles { "external/slang/source/core/slang-lz4-compression-system.cpp",    
-        "external/slang/source/core/slang-zip-file-system.cpp",
-        "external/slang/source/core/slang-deflate-compression-system.cpp",
-        }
+    removefiles 
+    { 
+        path.join(slangPath, "source/core/slang-lz4-compression-system.cpp"),    
+        path.join(slangPath, "source/core/slang-zip-file-system.cpp"),
+        path.join(slangPath, "source/core/slang-deflate-compression-system.cpp"),
+    }
 
     -- For our core implementation, we want to use the most
     -- aggressive warning level supported by the target, and
@@ -558,9 +571,9 @@ standardProject("core", "external/slang/source/core")
     flags { "FatalWarnings" }
     
     if isTargetWindows() then
-        addSourceDir "external/slang/source/core/windows"
+        addSourceDir(path.join(slangPath, "source/core/windows"))
     else
-        addSourceDir "external/slang/source/core/unix"
+        addSourceDir(path.join(slangPath, "source/core/unix"))
     end
     
 standardProject("compiler-core", "source/compiler-core")
@@ -580,7 +593,50 @@ standardProject("compiler-core", "source/compiler-core")
     flags { "FatalWarnings" }    
     
     if isTargetWindows() then
-        addSourceDir "external/slang/source/compiler-core/windows"
+        addSourceDir(path.join(slangPath, "source/compiler-core/windows"))
     else
-        addSourceDir "external/slang/source/compiler-core/unix"
+        addSourceDir(path.join(slangPath, "source/compiler-core/unix"))
     end
+
+
+standardProject("slang-llvm", "source/slang-llvm")
+    uuid "F74A3AF1-5F0B-4EDF-AD43-04DABE9CDC75"
+    kind "SharedLib"
+    warnings "Extra"
+    flags { "FatalWarnings" }
+    pic "On"
+    
+    includedirs {
+        -- So we can access slang.h
+        slangPath, 
+        -- For core/compiler-core
+        path.join(slangPath, "source"), 
+        -- LLVM/Clang headers
+        path.join(llvmBuildPath, "tools/clang/include"), 
+        path.join(llvmBuildPath, "include"), 
+        path.join(llvmPath, "clang/include"), 
+        path.join(llvmPath, "llvm/include")
+    }
+    
+    filter { "toolset:msc-*" }
+        -- Disable warnings that are a problem on LLVM/Clang on windows
+        disablewarnings(disableWarningsList) 
+        -- LLVM/Clang need this system library
+        links { "version" }
+    
+    filter { "configurations:debug" }    
+        local libPath = path.join(llvmBuildPath, "Debug/lib")
+        libdirs { libPath }
+        -- We need to vary this depending on type
+        links(findLibraries(libPath, "clang*", isClangLibraryName))
+        links(findLibraries(libPath,"LLVM*"))
+        
+    filter { "configurations:release" }    
+        local libPath = path.join(llvmBuildPath, "Release/lib")
+        libdirs { libPath }
+        -- We need to vary this depending on type
+        links(findLibraries(libPath, "clang*", isClangLibraryName))
+        links(findLibraries(libPath,"LLVM*"))
+    
+    links { "core", "compiler-core" }
+    
