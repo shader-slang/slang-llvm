@@ -576,7 +576,7 @@ standardProject("core", path.join(slangPath, "source/core"))
         addSourceDir(path.join(slangPath, "source/core/unix"))
     end
     
-standardProject("compiler-core", "source/compiler-core")
+standardProject("compiler-core", path.join(slangPath, "source/compiler-core"))
     uuid "12C1E89D-F5D0-41D3-8E8D-FB3F358F8126"
     kind "StaticLib"
     -- We need the compiler-core library to be relocatable to be able to link with slang.so
@@ -598,15 +598,17 @@ standardProject("compiler-core", "source/compiler-core")
         addSourceDir(path.join(slangPath, "source/compiler-core/unix"))
     end
 
-
 standardProject("slang-llvm", "source/slang-llvm")
     uuid "F74A3AF1-5F0B-4EDF-AD43-04DABE9CDC75"
     kind "SharedLib"
     warnings "Extra"
     flags { "FatalWarnings" }
     pic "On"
+
+    links { "core", "compiler-core" }
     
-    includedirs {
+    includedirs 
+    {
         -- So we can access slang.h
         slangPath, 
         -- For core/compiler-core
@@ -622,8 +624,8 @@ standardProject("slang-llvm", "source/slang-llvm")
         -- Disable warnings that are a problem on LLVM/Clang on windows
         disablewarnings(disableWarningsList) 
         -- LLVM/Clang need this system library
-        links { "version" }
-    
+        links { "version" } 
+        
     filter { "configurations:debug" }    
         local libPath = path.join(llvmBuildPath, "Debug/lib")
         libdirs { libPath }
@@ -636,7 +638,5 @@ standardProject("slang-llvm", "source/slang-llvm")
         libdirs { libPath }
         -- We need to vary this depending on type
         links(findLibraries(libPath, "clang*", isClangLibraryName))
-        links(findLibraries(libPath,"LLVM*"))
-    
-    links { "core", "compiler-core" }
-    
+        links(findLibraries(libPath,"LLVM*")) 
+
