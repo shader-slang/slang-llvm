@@ -77,7 +77,7 @@
 #   define SLANG_LLVM_STD
 #endif
 
-namespace slang_clang {
+namespace slang_llvm {
 
 using namespace clang;
 
@@ -93,9 +93,8 @@ public:
     typedef DownstreamCompiler Super;
 
     /// Compile using the specified options. The result is in resOut
-    virtual SlangResult compile(const CompileOptions& options, RefPtr<DownstreamCompileResult>& outResult) = 0;
+    virtual SlangResult compile(const CompileOptions& options, RefPtr<DownstreamCompileResult>& outResult) SLANG_OVERRIDE;
     virtual SlangResult disassemble(SlangCompileTarget sourceBlobTarget, const void* blob, size_t blobSize, ISlangBlob** out) SLANG_OVERRIDE;
-
     virtual bool isFileBased() SLANG_OVERRIDE { return false; }
 
     LLVMDownstreamCompiler()
@@ -114,7 +113,6 @@ SlangResult LLVMDownstreamCompiler::disassemble(SlangCompileTarget sourceBlobTar
 {
     return SLANG_E_NOT_IMPLEMENTED;
 }
-
 
 class LLVMDownstreamCompileResult : public ISlangSharedLibrary, public DownstreamCompileResult
 {
@@ -458,6 +456,30 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
     //action = frontend::ActionKind::EmitObj;
     //action = frontend::ActionKind::EmitAssembly;
 
+    Language language;
+    LangStandard::Kind langStd;
+    switch (options.sourceLanguage)
+    {
+        case SLANG_SOURCE_LANGUAGE_CPP:
+        {
+            language = Language::CXX;
+            langStd = LangStandard::Kind::lang_cxx17;
+            break;
+        }
+        case SLANG_SOURCE_LANGUAGE_C:
+        {
+            language = Language::C;
+            langStd = LangStandard::Kind::lang_c17;
+            break;
+        }
+        default:
+        {
+            return SLANG_E_NOT_AVAILABLE;
+        }
+    }
+
+    const InputKind inputKind(language, InputKind::Format::Source);
+
     {
         auto& opts = invocation.getFrontendOpts();
 
@@ -466,7 +488,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         // not super surprising as one isn't set, but it's not clear how one would be set when the input is a memory buffer.
         // For Slang usage, this probably isn't an issue, because it's *output* typically holds #line directives.
         {
-            InputKind inputKind(Language::CXX, InputKind::Format::Source);
+            
             FrontendInputFile inputFile(*sourceBuffer, inputKind);
 
             opts.Inputs.push_back(inputFile);
@@ -496,25 +518,33 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         }
     }
 
+
+    llvm::Triple targetTriple;
+    {
+        auto& opts = invocation.getTargetOpts();
+
+        opts.Triple = LLVM_DEFAULT_TARGET_TRIPLE;
+
+        // A code model isn't set by default, "default" seems to fit the bill here 
+        opts.CodeModel = "default";
+
+        targetTriple = llvm::Triple(opts.Triple);
+    }
+
     {
         auto opts = invocation.getLangOpts();
 
-        switch (options.sourceLanguage)
+        std::vector<std::string> includes;
+        for (const auto& includePath : options.includePaths)
         {
-            case SLANG_SOURCE_LANGUAGE_CPP:
-            {
-                opts->Bool = 1;
-                opts->CPlusPlus = 1;
-                opts->LangStd = LangStandard::Kind::lang_cxx11;
-                break;
-            }
-            case SLANG_SOURCE_LANGUAGE_C:
-            {
-                opts->Bool = 1;
-                opts->LangStd = LangStandard::Kind::lang_c17;
-                break;
-            }
-            default:    return SLANG_E_NOT_AVAILABLE;
+            includes.push_back(includePath.getBuffer());
+        }
+
+        clang::CompilerInvocation::setLangDefaults(*opts, inputKind, targetTriple, includes, langStd);
+
+        if (options.floatingPointMode == DownstreamCompiler::FloatingPointMode::Fast)
+        {
+            opts->FastMath = true;
         }
     }
 
@@ -530,17 +560,6 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         //opts.UseLibcxx = true;
     }
 
-    llvm::Triple targetTriple;
-    {
-        auto& opts = invocation.getTargetOpts();
-
-        opts.Triple = LLVM_DEFAULT_TARGET_TRIPLE;
-
-        // A code model isn't set by default, "default" seems to fit the bill here 
-        opts.CodeModel = "default";
-
-        targetTriple = llvm::Triple(opts.Triple);
-    }
 
     {
         auto& opts = invocation.getCodeGenOpts();
@@ -676,6 +695,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
     switch (options.targetType)
     {
+        case SLANG_SHARED_LIBRARY:
         case SLANG_HOST_CALLABLE:
         {
             // Try running something in the module on the JIT
@@ -744,9 +764,11 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
     return SLANG_FAIL;
 }
 
-} // namespace slang_clang
+} // namespace slang_llvm
 
 extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler(Slang::RefPtr<Slang::DownstreamCompiler>&out)
 {
-    return SLANG_FAIL;
+    Slang::RefPtr<slang_llvm::LLVMDownstreamCompiler> compiler(new slang_llvm::LLVMDownstreamCompiler);
+    out = compiler;
+    return SLANG_OK;
 }
