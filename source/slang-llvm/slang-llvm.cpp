@@ -171,8 +171,10 @@ static void _ensureSufficientStack() {}
 
 static void _llvmErrorHandler(void* userData, const std::string& message, bool genCrashDiag)
 {
-    DiagnosticsEngine& diags = *static_cast<DiagnosticsEngine*>(userData);
-    diags.Report(diag::err_fe_error_backend) << message;
+    //DiagnosticsEngine& diags = *static_cast<DiagnosticsEngine*>(userData);
+    //diags.Report(diag::err_fe_error_backend) << message;
+
+    printf("Clang/LLVM fatal error: %s\n", message.c_str());
 
     // Run the interrupt handlers to make sure any special cleanups get done, in
     // particular that we remove files registered with RemoveFileOnSignal.
@@ -280,6 +282,12 @@ static double F64_frexp(double x, double* e)
     return m;
 }
 
+static void assertFailed(const char* msg)
+{
+    printf("Assert failed: %s\n", msg);
+    SLANG_BREAKPOINT(0);
+}
+
 // These are only the functions that cannot be implemented with 'reasonable performance' in the prelude.
 // It is assumed that calling from JIT to C function whilst not super expensive, is an issue. 
 
@@ -351,7 +359,14 @@ static double F64_frexp(double x, double* e)
     \
     x(F32_modf, modff, float, (float, float*)) \
     x(F32_fmod, fmodf, float, (float, float)) \
-    x(F32_remainder, remainderf, float, (float, float)) 
+    x(F32_remainder, remainderf, float, (float, float)) \
+    \
+    x(assertFailed, assertFailed, void, (const char*)) \
+    \
+    x(memcpy, memcpy, void*, (void*, const void*, size_t)) \
+    x(memmove, memmove, void*, (void*, const void*, size_t)) \
+    x(memcmp, memcmp, int, (const void*, const void*, size_t)) \
+    x(memset, memset, void*, (void*, int, size_t)) 
 
 static void _appendBuiltinPrototypes(Slang::StringBuilder& out)
 {
@@ -394,6 +409,12 @@ static SlangResult _initLLVM()
 
     llvm::InitializeNativeTargetDisassembler();
 #endif
+
+    // Set an error handler, so that any LLVM backend diagnostics go through our
+    // error handler.
+    //llvm::install_fatal_error_handler(_llvmErrorHandler, static_cast<void*>(&clang->getDiagnostics()));
+    // NOTE! Can only be set once.
+    llvm::install_fatal_error_handler(_llvmErrorHandler, nullptr);
 
     return SLANG_OK;
 }
@@ -613,10 +634,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
     clang->createFileManager();
     clang->createSourceManager(clang->getFileManager());
 
-    // Set an error handler, so that any LLVM backend diagnostics go through our
-    // error handler.
-    llvm::install_fatal_error_handler(_llvmErrorHandler, static_cast<void*>(&clang->getDiagnostics()));
-
+    
     std::unique_ptr<LLVMContext> llvmContext = std::make_unique<LLVMContext>();
 
     clang::CodeGenAction* codeGenAction = nullptr;
