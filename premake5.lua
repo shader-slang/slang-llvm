@@ -188,12 +188,16 @@ newoption {
    description = "The path to the build directory for LLVM",
    value       = "string"
 }
+newoption {
+   trigger     = "slang-path",
+   description = "The path to the Slang, defaults to external/slang",
+   value       = "string",
+   default     = "external/slang"
+}
 
 targetDetail = _OPTIONS["target-detail"]
 llvmPath = _OPTIONS["llvm-path"]
-
---slangPath = "external/slang"
-slangPath = "E:/git/slang-jsmall-nvidia"
+slangPath = _OPTIONS["slang-path"]
 
 if not llvmPath then
     print("llvm-path option must be set")
