@@ -238,7 +238,7 @@ public:
         m_diagnostics.diagnostics.add(diagnostic);
     }
 
-    bool hasError() const { return m_diagnostics.getCountByMinSeverity(DownstreamDiagnostic::Severity::Error) > 0; }
+    bool hasError() const { return m_diagnostics.getCountAtLeastSeverity(DownstreamDiagnostic::Severity::Error) > 0; }
 
     DownstreamDiagnostics m_diagnostics;
 };
@@ -647,6 +647,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         if (!compileSucceeded)
         {
             diagsBuffer.m_diagnostics.requireErrorDiagnostic();
+            diagsBuffer.m_diagnostics.result = SLANG_FAIL;
         }
 
         if (!compileSucceeded || diagsBuffer.hasError())
