@@ -296,6 +296,7 @@ static void assertFailed(const char* msg)
     x(F64_ceil, ceil, double, (double)) \
     x(F64_floor, floor, double, (double)) \
     x(F64_round, round, double, (double)) \
+    x(F64_abs, fabs, double, (double)) \
     x(F64_sin, sin, double, (double)) \
     x(F64_cos, cos, double, (double)) \
     x(F64_tan, tan, double, (double)) \
@@ -330,6 +331,7 @@ static void assertFailed(const char* msg)
     x(F32_ceil, ceilf, float, (float)) \
     x(F32_floor, floorf, float, (float)) \
     x(F32_round, roundf, float, (float)) \
+    x(F32_abs, fabsf, float, (float)) \
     x(F32_sin, sinf, float, (float)) \
     x(F32_cos, cosf, float, (float)) \
     x(F32_tan, tanf, float, (float)) \
@@ -665,13 +667,13 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         if (!compileSucceeded)
         {
             diagsBuffer.m_diagnostics.requireErrorDiagnostic();
-            diagsBuffer.m_diagnostics.result = SLANG_FAIL;
         }
-
+        
         if (!compileSucceeded || diagsBuffer.hasError())
         {
+            diagsBuffer.m_diagnostics.result = SLANG_FAIL;
             outResult = new BlobDownstreamCompileResult(diagsBuffer.m_diagnostics, nullptr);
-            return SLANG_FAIL;
+            return SLANG_OK;
         }
     }
 
@@ -714,6 +716,8 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
     switch (options.targetType)
     {
+        // TODO(JS): Shared library may not be appropriate, but as long as the 'shared library' is never accessed as a blob
+        // all is good.
         case SLANG_SHARED_LIBRARY:
         case SLANG_HOST_CALLABLE:
         {
