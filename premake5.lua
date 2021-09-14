@@ -106,6 +106,21 @@ function isClangLibraryName(name)
     return not string.startswith(name, "clang-")
 end
 
+-- 
+-- The LLVM-C library seems to confuse things because
+-- 
+-- * It must be built as a shared library 
+-- ** LLVM will make it a shared library, even if *static* library is selected (as here)
+-- * If it links with the project it breaks the LLVM JIT 
+-- 
+-- This is probably the case because the symbol/s is multiply defined and if the linker picks
+-- the ones in LLVM-C, then the registering of targets is *in* the LLVM-C impl.
+--
+-- So to avoid this we, just remove from linked libraries
+function isLLVMLibraryName(name)
+    return not string.startswith(name, "LLVM-C")
+end
+
 function findLibraries(basePath, inMatchName, matchFunc)
     local matchName = inMatchName
     if isTargetWindows() then
@@ -501,8 +516,6 @@ function example(name)
     links { "core"  }
 end
 
-
-
 --
 -- With all of these helper routines defined, we can now define the
 -- actual projects quite simply. 
@@ -534,14 +547,15 @@ example "clang-direct"
         libdirs { libPath }
         -- We need to vary this depending on type
         links(findLibraries(libPath, "clang*", isClangLibraryName))
-        links(findLibraries(libPath,"LLVM*"))
+        links(findLibraries(libPath, "LLVM*", isLLVMLibraryName))
         
     filter { "configurations:release" }    
+        -- Can use RelWithDebInfo if lib is available to have symbols in Release
         local libPath = path.join(llvmBuildPath, "Release/lib")
         libdirs { libPath }
         -- We need to vary this depending on type
         links(findLibraries(libPath, "clang*", isClangLibraryName))
-        links(findLibraries(libPath,"LLVM*"))
+        links(findLibraries(libPath, "LLVM*", isLLVMLibraryName))
     
     links { "core", "compiler-core" }
 
@@ -635,12 +649,12 @@ standardProject("slang-llvm", "source/slang-llvm")
         libdirs { libPath }
         -- We need to vary this depending on type
         links(findLibraries(libPath, "clang*", isClangLibraryName))
-        links(findLibraries(libPath,"LLVM*"))
+        links(findLibraries(libPath, "LLVM*", isLLVMLibraryName))
         
     filter { "configurations:release" }    
         local libPath = path.join(llvmBuildPath, "Release/lib")
         libdirs { libPath }
         -- We need to vary this depending on type
         links(findLibraries(libPath, "clang*", isClangLibraryName))
-        links(findLibraries(libPath,"LLVM*")) 
+        links(findLibraries(libPath, "LLVM*", isLLVMLibraryName)) 
 

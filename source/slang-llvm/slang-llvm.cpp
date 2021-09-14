@@ -64,6 +64,8 @@
 #include <core/slang-list.h>
 #include <core/slang-string.h>
 
+#include <core/slang-hash.h>
+
 #include <compiler-core/slang-downstream-compiler.h>
 
 #include <stdio.h>
@@ -370,17 +372,6 @@ static void assertFailed(const char* msg)
     x(memcmp, memcmp, int, (const void*, const void*, size_t)) \
     x(memset, memset, void*, (void*, int, size_t)) 
 
-static void _appendBuiltinPrototypes(Slang::StringBuilder& out)
-{
-    // Make all function names unmangled that are implemented externally.
-    out << "extern \"C\" { \n";
-
-#define SLANG_LLVM_APPEND_PROTOTYPE(name, cppName, retType, paramTypes)     out << #retType << " " << #name << #paramTypes << ";\n";
-    SLANG_LLVM_FUNCS(SLANG_LLVM_APPEND_PROTOTYPE)
-
-        out << "}\n\n";
-}
-
 static int _getOptimizationLevel(DownstreamCompiler::OptimizationLevel level)
 {
     typedef DownstreamCompiler::OptimizationLevel OptimizationLevel;
@@ -443,11 +434,6 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
     BufferedDiagnosticConsumer diagsBuffer;
 
     IntrusiveRefCntPtr<DiagnosticsEngine> diags = new DiagnosticsEngine(diagID, diagOpts, &diagsBuffer, false);
-
-    //Slang::StringBuilder source;
-    //_appendBuiltinPrototypes(source);
-    //source << "\n\n";
-    //source << cppSource;
 
     const auto& source = options.sourceContents;
     StringRef sourceStringRef(source.getBuffer(), source.getLength());
@@ -513,7 +499,6 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         {
             
             FrontendInputFile inputFile(*sourceBuffer, inputKind);
-
             opts.Inputs.push_back(inputFile);
         }
 
@@ -731,7 +716,45 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
                 Expected<std::unique_ptr< llvm::orc::LLJIT>> expectJit = jitBuilder.create();
                 if (!expectJit)
                 {
-                    return SLANG_FAIL;
+                    /* JS: NOTE!
+                    
+                    It is worth saying there can be some odd issues around creating the JIT - if LLVM-C is linked against.
+                    
+                    If it is then LLVM will likely startup saying LLVM-C isn't found.
+                    BUT if you have LLVM *installed* on your system (as is reasonable to do from a LLVM distro, then
+                    at startup it *MIGHT* find a LLVM-C dll in that installation (ie nothing to do with the version of LLVM
+                    linked with). This will likely lead to an odd error saying the 'triple can't be found' and that no
+                    targets are registered.
+
+                    Also note that the behavior *may* be different with Debug/Release - because of how the linked resolves symbols
+                    that are multiply defined.
+
+                    If there are problems creating the JIT, check that LLVM-C is not linked against (it should be disabled in the premake).
+                    */
+
+                    auto err = expectJit.takeError();
+
+                    std::string jitErrorString;
+                    llvm::raw_string_ostream jitErrorStream(jitErrorString);
+
+                    jitErrorStream << err;
+
+                    DownstreamDiagnostic diagnostic;
+
+                    StringBuilder buf;
+                    buf << "Unable to create JIT engine: " << jitErrorString.c_str();
+
+                    diagnostic.severity = DownstreamDiagnostic::Severity::Error;
+                    diagnostic.stage = DownstreamDiagnostic::Stage::Link;
+                    diagnostic.text = buf.ProduceString();
+                    diagnostic.fileLine = 0;
+
+                    // Add the error
+                    diagsBuffer.m_diagnostics.diagnostics.add(diagnostic);
+                    diagsBuffer.m_diagnostics.result = SLANG_FAIL;
+
+                    outResult = new BlobDownstreamCompileResult(diagsBuffer.m_diagnostics, nullptr);
+                    return SLANG_OK;
                 }
                 jit = std::move(*expectJit);
             }

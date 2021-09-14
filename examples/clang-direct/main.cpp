@@ -64,15 +64,6 @@
 
 #include <stdio.h>
 
-// We want to make math functions available to the JIT
-#if SLANG_GCC_FAMILY && __GNUC__ < 6
-#   include <cmath>
-#   define SLANG_LLVM_STD std::
-#else
-#   include <math.h>
-#   define SLANG_LLVM_STD
-#endif
-
 namespace slang_clang {
 
 using namespace clang;
@@ -145,129 +136,9 @@ public:
     Slang::List<Entry> m_entries;
 };
 
-/*
-* A question is how to make the prototypes available for these functions. They would need to be defined before the
-* the prelude - or potentially in the prelude.
-*
-* I could just define the prototypes in the prelude, and only impl, if needed. Here though I require that all the functions
-* implemented here, use C style names (ie unmanagled) to simplify lookup.
-*/
-
-struct NameAndFunc
-{
-    typedef void (*Func)();
-
-    const char* name;
-    Func func;
-};
-
-#define SLANG_LLVM_EXPAND(x) x
-
-#define SLANG_LLVM_FUNC(name, cppName, retType, paramTypes) NameAndFunc{ #name, (NameAndFunc::Func)static_cast<retType (*) paramTypes>(&SLANG_LLVM_EXPAND(cppName)) },
-
-// Implementations of maths functions available to JIT
-static float F32_frexp(float x, float* e)
-{
-    int ei;
-    float m = ::frexpf(x, &ei);
-    *e = float(ei);
-    return m;
-}
-
-static double F64_frexp(double x, double* e)
-{
-    int ei;
-    double m = ::frexp(x, &ei);
-    *e = float(ei);
-    return m;
-}
-
-// These are only the functions that cannot be implemented with 'reasonable performance' in the prelude.
-// It is assumed that calling from JIT to C function whilst not super expensive, is an issue. 
-
-// name, cppName, retType, paramTypes
-#define SLANG_LLVM_FUNCS(x) \
-    x(F64_ceil, ceil, double, (double)) \
-    x(F64_floor, floor, double, (double)) \
-    x(F64_round, round, double, (double)) \
-    x(F64_sin, sin, double, (double)) \
-    x(F64_cos, cos, double, (double)) \
-    x(F64_tan, tan, double, (double)) \
-    x(F64_asin, asin, double, (double)) \
-    x(F64_acos, acos, double, (double)) \
-    x(F64_atan, atan, double, (double)) \
-    x(F64_sinh, sinh, double, (double)) \
-    x(F64_cosh, cosh, double, (double)) \
-    x(F64_tanh, tanh, double, (double)) \
-    x(F64_log2, log2, double, (double)) \
-    x(F64_log, log, double, (double)) \
-    x(F64_log10, log10, double, (double)) \
-    x(F64_exp2, exp2, double, (double)) \
-    x(F64_exp, exp, double, (double)) \
-    x(F64_fabs, fabs, double, (double)) \
-    x(F64_trunc, trunc, double, (double)) \
-    x(F64_sqrt, sqrt, double, (double)) \
-    \
-    x(F64_isnan, SLANG_LLVM_STD isnan, bool, (double)) \
-    x(F64_isfinite, SLANG_LLVM_STD isfinite, bool, (double)) \
-    x(F64_isinf, SLANG_LLVM_STD isinf, bool, (double)) \
-    \
-    x(F64_atan2, atan2, double, (double, double)) \
-    \
-    x(F64_frexp, F64_frexp, double, (double, double*)) \
-    x(F64_pow, pow, double, (double, double)) \
-    \
-    x(F64_modf, modf, double, (double, double*)) \
-    x(F64_fmod, fmod, double, (double, double)) \
-    x(F64_remainder, remainder, double, (double, double)) \
-    \
-    x(F32_ceil, ceilf, float, (float)) \
-    x(F32_floor, floorf, float, (float)) \
-    x(F32_round, roundf, float, (float)) \
-    x(F32_sin, sinf, float, (float)) \
-    x(F32_cos, cosf, float, (float)) \
-    x(F32_tan, tanf, float, (float)) \
-    x(F32_asin, asinf, float, (float)) \
-    x(F32_acos, acosf, float, (float)) \
-    x(F32_atan, atanf, float, (float)) \
-    x(F32_sinh, sinhf, float, (float)) \
-    x(F32_cosh, coshf, float, (float)) \
-    x(F32_tanh, tanhf, float, (float)) \
-    x(F32_log2, log2f, float, (float)) \
-    x(F32_log, logf, float, (float)) \
-    x(F32_log10, log10f, float, (float)) \
-    x(F32_exp2, exp2f, float, (float)) \
-    x(F32_exp, expf, float, (float)) \
-    x(F32_fabs, fabsf, float, (float)) \
-    x(F32_trunc, truncf, float, (float)) \
-    x(F32_sqrt, sqrtf, float, (float)) \
-    \
-    x(F32_isnan, SLANG_LLVM_STD isnan, bool, (float)) \
-    x(F32_isfinite, SLANG_LLVM_STD isfinite, bool, (float)) \
-    x(F32_isinf, SLANG_LLVM_STD isinf, bool, (float)) \
-    \
-    x(F32_atan2, atan2f, float, (float, float)) \
-    \
-    x(F32_frexp, F32_frexp, float, (float, float*)) \
-    x(F32_pow, powf, float, (float, float)) \
-    \
-    x(F32_modf, modff, float, (float, float*)) \
-    x(F32_fmod, fmodf, float, (float, float)) \
-    x(F32_remainder, remainderf, float, (float, float)) 
-
-static void _appendBuiltinPrototypes(Slang::StringBuilder& out)
-{
-    // Make all function names unmangled that are implemented externally.
-    out << "extern \"C\" { \n";
-
-#define SLANG_LLVM_APPEND_PROTOTYPE(name, cppName, retType, paramTypes)     out << #retType << " " << #name << #paramTypes << ";\n";
-    SLANG_LLVM_FUNCS(SLANG_LLVM_APPEND_PROTOTYPE)
-
-    out << "}\n\n";
-}
-
 static const char cppSource[] =
-    "extern \"C\" double doSin(double f) { return F64_sin(f); }\n"
+    "extern \"C\" double sin(double);\n "
+    "extern \"C\" double doSin(double f) { return sin(f); }\n"
     "extern \"C\" int add(int a, int b) { return a + b; } int main() { return 0; }";
 
 static SlangResult _compile()
@@ -307,8 +178,6 @@ static SlangResult _compile()
     IntrusiveRefCntPtr<DiagnosticsEngine> diags = new DiagnosticsEngine(diagID, diagOpts, &diagsBuffer, false);
 
     Slang::StringBuilder source;
-    _appendBuiltinPrototypes(source);
-    source << "\n\n";
     source << cppSource;
 
     StringRef sourceStringRef(source.getBuffer(), source.getLength());
@@ -518,12 +387,25 @@ static SlangResult _compile()
         std::unique_ptr<llvm::orc::LLJIT> jit;
         {
             // Create the JIT
-
             LLJITBuilder jitBuilder;
 
-            Expected<std::unique_ptr< llvm::orc::LLJIT>> expectJit = jitBuilder.create();
+            // Defaults to the 'system' that this library was compiled with. For our purposes here, this is fine.
+            
+            // This can fail with "Unable to find target for this triple (no targets are registered)".
+            // The error is actually from TargetRegistry
+
+            Expected<std::unique_ptr<llvm::orc::LLJIT>> expectJit = jitBuilder.create();
             if (!expectJit)
             {
+                auto err = expectJit.takeError();
+
+                std::string jitErrorString;
+                llvm::raw_string_ostream jitErrorStream(jitErrorString);
+
+                jitErrorStream << err;
+
+                printf("Unable to create JIT: %s\n", jitErrorString.c_str());
+
                 return SLANG_FAIL;
             }
             jit = std::move(*expectJit); 
@@ -548,19 +430,7 @@ static SlangResult _compile()
 
                 // Add all the symbolmap
                 SymbolMap symbolMap;
-
-                //symbolMap.insert(std::make_pair(mangler("sin"), JITEvaluatedSymbol::fromPointer(static_cast<double (*)(double)>(&sin))));
-
-                const NameAndFunc funcs[] =
-                {
-                    SLANG_LLVM_FUNCS(SLANG_LLVM_FUNC)
-                };
-
-                for (auto& func : funcs)
-                {
-                    symbolMap.insert(std::make_pair(mangler(func.name), JITEvaluatedSymbol::fromPointer(func.func)));
-                }
-
+                symbolMap.insert(std::make_pair(mangler("sin"), JITEvaluatedSymbol::fromPointer(static_cast<double (*)(double)>(&sin))));
                 stdcLib.define(absoluteSymbols(symbolMap));
 
                 // Required or the symbols won't be found
@@ -583,7 +453,7 @@ static SlangResult _compile()
             Func func = (Func)add.getAddress();
             int result = func(1, 3);
 
-            SLANG_ASSERT(result == 4);
+            SLANG_RELEASE_ASSERT(result == 4);
         }
 
         auto doSinExpected = jit->lookup("doSin");
@@ -595,7 +465,7 @@ static SlangResult _compile()
 
             double result = func(0.5);
 
-            SLANG_ASSERT(result == ::sin(0.5));
+            SLANG_RELEASE_ASSERT(result == ::sin(0.5));
         }
     }
 
