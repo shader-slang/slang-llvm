@@ -387,10 +387,14 @@ static SlangResult _compile()
         std::unique_ptr<llvm::orc::LLJIT> jit;
         {
             // Create the JIT
-
             LLJITBuilder jitBuilder;
 
-            Expected<std::unique_ptr< llvm::orc::LLJIT>> expectJit = jitBuilder.create();
+            // Defaults to the 'system' that this library was compiled with. For our purposes here, this is fine.
+            
+            // This can fail with "Unable to find target for this triple (no targets are registered)".
+            // The error is actually from TargetRegistry
+
+            Expected<std::unique_ptr<llvm::orc::LLJIT>> expectJit = jitBuilder.create();
             if (!expectJit)
             {
                 auto err = expectJit.takeError();
@@ -449,7 +453,7 @@ static SlangResult _compile()
             Func func = (Func)add.getAddress();
             int result = func(1, 3);
 
-            SLANG_ASSERT(result == 4);
+            SLANG_RELEASE_ASSERT(result == 4);
         }
 
         auto doSinExpected = jit->lookup("doSin");
@@ -461,7 +465,7 @@ static SlangResult _compile()
 
             double result = func(0.5);
 
-            SLANG_ASSERT(result == ::sin(0.5));
+            SLANG_RELEASE_ASSERT(result == ::sin(0.5));
         }
     }
 

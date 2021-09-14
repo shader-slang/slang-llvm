@@ -716,6 +716,22 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
                 Expected<std::unique_ptr< llvm::orc::LLJIT>> expectJit = jitBuilder.create();
                 if (!expectJit)
                 {
+                    /* JS: NOTE!
+                    
+                    It is worth saying there can be some odd issues around creating the JIT - if LLVM-C is linked against.
+                    
+                    If it is then LLVM will likely startup saying LLVM-C isn't found.
+                    BUT if you have LLVM *installed* on your system (as is reasonable to do from a LLVM distro, then
+                    at startup it *MIGHT* find a LLVM-C dll in that installation (ie nothing to do with the version of LLVM
+                    linked with). This will likely lead to an odd error saying the 'triple can't be found' and that no
+                    targets are registered.
+
+                    Also note that the behavior *may* be different with Debug/Release - because of how the linked resolves symbols
+                    that are multiply defined.
+
+                    If there are problems creating the JIT, check that LLVM-C is not linked against (it should be disabled in the premake).
+                    */
+
                     auto err = expectJit.takeError();
 
                     std::string jitErrorString;
