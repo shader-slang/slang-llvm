@@ -64,6 +64,8 @@
 #include <core/slang-list.h>
 #include <core/slang-string.h>
 
+#include <core/slang-hash.h>
+
 #include <compiler-core/slang-downstream-compiler.h>
 
 #include <stdio.h>
@@ -370,17 +372,6 @@ static void assertFailed(const char* msg)
     x(memcmp, memcmp, int, (const void*, const void*, size_t)) \
     x(memset, memset, void*, (void*, int, size_t)) 
 
-static void _appendBuiltinPrototypes(Slang::StringBuilder& out)
-{
-    // Make all function names unmangled that are implemented externally.
-    out << "extern \"C\" { \n";
-
-#define SLANG_LLVM_APPEND_PROTOTYPE(name, cppName, retType, paramTypes)     out << #retType << " " << #name << #paramTypes << ";\n";
-    SLANG_LLVM_FUNCS(SLANG_LLVM_APPEND_PROTOTYPE)
-
-        out << "}\n\n";
-}
-
 static int _getOptimizationLevel(DownstreamCompiler::OptimizationLevel level)
 {
     typedef DownstreamCompiler::OptimizationLevel OptimizationLevel;
@@ -443,11 +434,6 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
     BufferedDiagnosticConsumer diagsBuffer;
 
     IntrusiveRefCntPtr<DiagnosticsEngine> diags = new DiagnosticsEngine(diagID, diagOpts, &diagsBuffer, false);
-
-    //Slang::StringBuilder source;
-    //_appendBuiltinPrototypes(source);
-    //source << "\n\n";
-    //source << cppSource;
 
     const auto& source = options.sourceContents;
     StringRef sourceStringRef(source.getBuffer(), source.getLength());
@@ -513,7 +499,6 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         {
             
             FrontendInputFile inputFile(*sourceBuffer, inputKind);
-
             opts.Inputs.push_back(inputFile);
         }
 
@@ -731,6 +716,24 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
                 Expected<std::unique_ptr< llvm::orc::LLJIT>> expectJit = jitBuilder.create();
                 if (!expectJit)
                 {
+                    auto err = expectJit.takeError();
+
+                    std::string jitErrorString;
+                    llvm::raw_string_ostream jitErrorStream(jitErrorString);
+
+                    jitErrorStream << err;
+
+                    DownstreamDiagnostic diagnostic;
+
+                    diagnostic.severity = DownstreamDiagnostic::Severity::Error;
+                    diagnostic.stage = DownstreamDiagnostic::Stage::Link;
+                    diagnostic.text = jitErrorString.c_str();
+                    diagnostic.fileLine = 0;
+
+                    // Add the error
+                    diagsBuffer.m_diagnostics.diagnostics.add(diagnostic);
+
+                    outResult = new BlobDownstreamCompileResult(diagsBuffer.m_diagnostics, nullptr);
                     return SLANG_FAIL;
                 }
                 jit = std::move(*expectJit);
