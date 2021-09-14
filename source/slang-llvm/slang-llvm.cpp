@@ -725,16 +725,20 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
                     DownstreamDiagnostic diagnostic;
 
+                    StringBuilder buf;
+                    buf << "Unable to create JIT engine: " << jitErrorString.c_str();
+
                     diagnostic.severity = DownstreamDiagnostic::Severity::Error;
                     diagnostic.stage = DownstreamDiagnostic::Stage::Link;
-                    diagnostic.text = jitErrorString.c_str();
+                    diagnostic.text = buf.ProduceString();
                     diagnostic.fileLine = 0;
 
                     // Add the error
                     diagsBuffer.m_diagnostics.diagnostics.add(diagnostic);
+                    diagsBuffer.m_diagnostics.result = SLANG_FAIL;
 
                     outResult = new BlobDownstreamCompileResult(diagsBuffer.m_diagnostics, nullptr);
-                    return SLANG_FAIL;
+                    return SLANG_OK;
                 }
                 jit = std::move(*expectJit);
             }

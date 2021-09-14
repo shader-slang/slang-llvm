@@ -400,6 +400,8 @@ static SlangResult _compile()
 
                 jitErrorStream << err;
 
+                printf("Unable to create JIT: %s\n", jitErrorString.c_str());
+
                 return SLANG_FAIL;
             }
             jit = std::move(*expectJit); 
