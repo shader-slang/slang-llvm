@@ -126,7 +126,7 @@ function findLibraries(basePath, inMatchName, matchFunc)
     if isTargetWindows() then
         matchName = inMatchName .. ".lib"
     else
-        matchName = "lib" .. inMatchName .. ".*"
+        matchName = "lib" .. inMatchName .. ".a"
     end
  
     local matchPath = path.join(basePath, matchName)
@@ -278,8 +278,8 @@ workspace "slang-llvm"
     -- and configuration options, e.g. `bin/windows-x64/debug/`
     targetdir("bin/" .. targetName .. "/%{cfg.buildcfg:lower()}")
 
-    -- C++11 
-    cppdialect "C++11"
+    -- C++14 
+    cppdialect "C++14"
     
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     staticruntime "On"

@@ -474,7 +474,7 @@ static SlangResult _compile()
 
 } // namespace slang_clang
 
-int main(const char* const* argv, int argc)
+int main(int argc, const char* const* argv)
 {
     auto res = slang_clang::_compile();
 
