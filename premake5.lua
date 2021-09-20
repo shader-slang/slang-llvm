@@ -219,14 +219,14 @@ if not llvmPath then
     os.exit(-1)
 end
 
-llvmBuildPath = llvmPath .. "/build"
-libPrefix = ""
-
 -- Init globals used for setting up projects
 initGlobals(targetDetail)
 
+-- Set up the llvm path
+
+llvmBuildPath = llvmPath .. "/build"
 if (isTargetWindows()) then
-    llvmBuildPath = llvmPath .. "/build.vs"
+    llvmBuildPath = llvmPath .. "/build-x64"
 end
 
 if (not os.isdir(llvmPath) or not os.isdir(llvmBuildPath)) then
@@ -282,9 +282,7 @@ workspace "slang-llvm"
     cppdialect "C++11"
     
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
-    filter { "toolset:not msc-*" }
-        -- For now on windows we don't worry about this until we can build LLVM as STATIC
-        staticruntime "On"
+    staticruntime "On"
     
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     
