@@ -1,0 +1,65 @@
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+name: Upload Release Asset - Windows
+
+jobs:
+  build:
+    name: Upload Release Asset - Windows
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: ['Release']
+        # Currently only support x64, as only have LLVM binaries for that
+        # platform: ['Win32', 'x64']
+        platform: ['x64']
+    steps:
+      - uses: actions/checkout@v2.3.4
+        with:
+          submodules: 'true'
+          fetch-depth: '0'
+      - name: setup-msbuild
+        uses: microsoft/setup-msbuild@v1
+      - name: premake
+        run:
+          .\premake.bat vs2017 -deps
+      - name: msbuild
+        run:
+          MSBuild.exe slang.sln -v:m -m -property:Configuration=${{matrix.configuration}} -property:Platform=${{matrix.platform}} -property:WindowsTargetPlatformVersion=10.0.19041.0
+      - name: archive
+        id: archive
+        run: |
+          echo "achiving files..."
+          if ("${{matrix.platform}}" -eq "x64")
+          {
+            $slangDeployPlatform = "win64"
+          }
+          else
+          {
+            $slangDeployPlatform = "win32"
+          }
+          $tagName = & git describe --tags
+          $slangVersion = $tagName.TrimStart("v")
+          $binArchive = "slang-llvm-$slangVersion-$slangDeployPlatform.zip"
+
+          echo "name=BINARY_ARCHIVE::$binArchive"
+          echo "::set-output name=BINARY_ARCHIVE::$binArchive"
+
+          7z a "$binArchive" README.md
+          7z a "$binArchive" LICENSE
+          7z a "$binArchive" bin\*\*\*.dll
+          
+      - name: Check outputs
+        shell: pwsh
+        run: echo "binary is ${{ steps.archive.outputs.BINARY_ARCHIVE }}"
+      - name: UploadBinary
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ steps.archive.outputs.BINARY_ARCHIVE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
