@@ -222,7 +222,7 @@ function readJSONFromFile(path)
 end
 
 --
---
+-- Update dependencies
 -- 
 
 function updateDeps(platformName, jsonName)
@@ -235,8 +235,6 @@ function updateDeps(platformName, jsonName)
     if err then
         return error(err)
     end
-    
-    -- Platform
     
     -- Okay we have the json. We now need to work through the dependencies
     local projectInfo = result["project"]
@@ -285,10 +283,6 @@ function updateDeps(platformName, jsonName)
         -- We need to work out the filename.
         local packageFileName = path.getname(platformPackage)
         
-        --
-        -- If this exists, we *assume* it's downloaded and unziped
-        --
-        
         local dependencyPath = path.join("external", dependencyName)
         local packagePath = path.join("external", packageFileName)
         local packageInfoPath = path.join(dependencyPath, "package-info.json")
@@ -298,30 +292,34 @@ function updateDeps(platformName, jsonName)
             -- Check if the package info is suitable
             local result, err = readJSONFromFile(packageInfoPath)
         
-            -- If it contains the download package, we are done
+            -- If it contains a matching package name, we are done 
             if err == nil and result["name"] == packageFileName then
                 return
             end
-           
-            -- If not we need to delete this directory as we will want to expand into it
-            os.rmdir(dependencyPath)
         end
         
-        -- If the package file exists, then we don't need to download again
+        -- We don't know it the package is complete as downloaded. As the user can cancel for example. 
+        -- So we delete what we have, so we can redownload a fresh copy.
+        --
+        -- NOTE! This means that there is only two states, either we download and extract everything (and mark with package-info.json)
+        -- Or we have the download dependency with the correct package-info.json (ie a previous download/extraction was fully 
+        -- successful)
         if os.isfile(packagePath) then
-            -- It exists, so do nothing
-        else      
+            print("Removing '" .. packagePath .. "' for fresh download")
+            os.remove(packagePath)
+        end
+
+        do
             -- Download the package
             local result_str, response_code = http.download(url, packagePath, { progress = displayProgress })
             
-            -- Want to move down a line 
+            -- Want to move down a line (as progress stays on the same line)
             print("")
             
             if result_str == "OK" then
             else
                 -- Delete what we have
-                os.remove(packagePath)
-                return error("Unable to download '".. url .. "'")
+                return error("Unable to fully download '".. url .. "'")
             end
         end    
         
@@ -330,13 +328,13 @@ function updateDeps(platformName, jsonName)
             return error("Destination path '" .. dstPath .. "' not found")
         end
        
-        -- 
-        
+        -- If the dependency path exists, delete it so we can extract into a new copy
+       
         if os.isdir(dependencyPath) then
             os.rmdir(dependencyPath)
         end
        
-        print("Extracting '" .. packagePath .. "' to '" .. dependencyPath .. "' ...")
+        print("Extracting '" .. packagePath .. "' to '" .. dependencyPath .. "' (please be patient) ...")
        
         -- We can now unzip the package
         zip.extract(packagePath, dependencyPath)
@@ -384,27 +382,19 @@ newoption {
 targetDetail = _OPTIONS["target-detail"]
 llvmPath = _OPTIONS["llvm-path"]
 slangPath = _OPTIONS["slang-path"]
-deps = _OPTIONS["deps"]
+deps = not not _OPTIONS["deps"]
 
 if not llvmPath then
-    print("llvm-path option must be set")
-    os.exit(-1)
+    if deps or os.isdir("external/llvm") then
+        llvmPath = "external/llvm"
+    else
+        print("llvm-path option must be set, external/llvm isn't available")
+        os.exit(-1)
+    end
 end
 
 -- Init globals used for setting up projects
 initGlobals(targetDetail)
-
--- Set up the llvm path
-
-llvmBuildPath = llvmPath .. "/build"
-if (isTargetWindows()) then
-    llvmBuildPath = llvmPath .. "/build-x64"
-end
-
-if (not os.isdir(llvmPath) or not os.isdir(llvmBuildPath)) then
-    print("Need --llvm-path set to the directory root of LLVM project.")
-    os.exit(-1)
-end
 
 targetName = "%{cfg.system}-%{cfg.platform:lower()}"
 
@@ -440,6 +430,19 @@ end
 if deps then
     updateDeps(platformName)
 end
+
+-- Set up the llvm path
+
+llvmBuildPath = llvmPath .. "/build"
+if (isTargetWindows()) then
+    llvmBuildPath = llvmPath .. "/build-x64"
+end
+
+if (not os.isdir(llvmPath) or not os.isdir(llvmBuildPath)) then
+    print("Need --llvm-path set to the directory root of LLVM project.")
+    os.exit(-1)
+end
+
 
 
 workspace "slang-llvm"
