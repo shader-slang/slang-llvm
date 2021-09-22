@@ -206,7 +206,7 @@ function displayProgress(total, current)
     
     local bar = string.rep("#", downloadedBars) .. string.rep(".", numBars - downloadedBars)
     
-    local spinIndex = (current / 1024) % 4
+    local spinIndex = math.floor(current / 1024) % 4
     local spin = string.sub("|\\-/", spinIndex + 1, spinIndex + 1)
     
     io.write("\rDownload progress (" .. spin .. ") " .. bar )
