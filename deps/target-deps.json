@@ -1,0 +1,16 @@
+{
+    "project": {
+        "name" : "llvm-slang",
+        "dependencies" : [
+            {
+                "name" : "llvm",
+                "baseUrl" : "https://github.com/shader-slang/llvm-project/releases/download/slang-tot-10/",
+                "packages" : 
+                {
+                    "windows-x86_64" : "llvm-tot-10-win64-Release.zip",
+                    "linux-x86_64" : "llvm-slang-tot-10-linux-x86_64-Release.zip"
+                }
+            }
+        ]
+    }
+}

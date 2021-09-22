@@ -187,6 +187,161 @@ function getBuildLocationName()
     end 
 end
 
+function displayProgress(total, current)  
+    local ratio = current / total;  
+    ratio = math.min(math.max(ratio, 0), 1);  
+    --local percent = math.floor(ratio * 100);  
+    
+    local numBars = 24
+    local downloadedBars = math.floor(ratio * numBars)
+    
+    local bar = string.rep("#", downloadedBars) .. string.rep("-", numBars - downloadedBars)
+    
+    local spinIndex = (math.floor(ratio * 10000) % 4)
+    
+    local spin = string.sub("|\\-/", spinIndex + 1, spinIndex + 1)
+    
+    io.write("\rDownload progress (" .. spin .. ") " .. bar )
+end
+
+function readJSONFromFile(path)
+    local fileContents = io.readfile(path)
+    if fileContents == nil then
+        return nil, "Unable to read file '" .. path .. "'"
+    end
+    
+    return json.decode(fileContents)
+end
+
+--
+--
+-- 
+
+function updateDeps(platformName, jsonName)
+    if jsonName == nil then
+        jsonName = "deps/target-deps.json"
+    end
+    
+    -- Load the json
+    local result, err = readJSONFromFile(jsonName)
+    if err then
+        return error(err)
+    end
+    
+    -- Platform
+    
+    -- Okay we have the json. We now need to work through the dependencies
+    local projectInfo = result["project"]
+    if projectInfo == nil then
+        return error("Expecting 'project' in json")
+    end
+    
+    local projectName = projectInfo["name"]
+    
+    -- If no dependencies we are done
+    local dependencies = projectInfo["dependencies"]
+    if dependencies == nil then
+        return
+    end
+    
+    for i, dependency in ipairs(dependencies) 
+    do
+        local dependencyName = dependency["name"]
+        if dependencyName == nil then
+            return error("Dependency doesn't have a name")
+        end
+       
+        local baseUrl = dependency["baseUrl"]
+        local packages = dependency["packages"]
+      
+        local platformPackage = packages[platformName]
+        if platformPackage == nil then
+            return error("No package fro dependency '" .. dependencyName .. "' for target '" ..platform .. "'")
+        end
+       
+        local url = platformPackage
+        
+        -- If it starts with file: we can just use the file
+        -- If it starts with dir: (say) then we just use the directory 
+        
+        if string.startswith(url, "https://") or 
+           string.startswith(url, "http://") or
+           string.startswith(url, "file://") or 
+           string.startswith(url, "dir://") then
+        else
+            if type(baseUrl) == "string" then
+                url = baseUrl .. url
+            end
+        end
+       
+        -- We need to work out the filename.
+        local packageFileName = path.getname(platformPackage)
+        
+        --
+        -- If this exists, we *assume* it's downloaded and unziped
+        --
+        
+        local dependencyPath = path.join("external", dependencyName)
+        local packagePath = path.join("external", packageFileName)
+        local packageInfoPath = path.join(dependencyPath, "package-info.json")
+        
+        -- Check if there is an expansion of the dependency
+        if os.isdir(dependencyPath) then
+            -- Check if the package info is suitable
+            local result, err = readJSONFromFile(packageInfoPath)
+        
+            -- If it contains the download package, we are done
+            if err == nil and result["name"] == packageFileName then
+                return
+            end
+           
+            -- If not we need to delete this directory as we will want to expand into it
+            os.rmdir(dependencyPath)
+        end
+        
+        -- If the package file exists, then we don't need to download again
+        if os.isfile(packagePath) then
+            -- It exists, so do nothing
+        else      
+            -- Download the package
+            local result_str, response_code = http.download(url, packagePath, { progress = displayProgress })
+            
+            -- Want to move down a line 
+            print("")
+            
+            if result_str == "OK" then
+            else
+                -- Delete what we have
+                os.remove(packagePath)
+                return error("Unable to download '".. url .. "'")
+            end
+        end    
+        
+        if not os.isfile(packagePath) then
+            -- It exists, so do nothing
+            return error("Destination path '" .. dstPath .. "' not found")
+        end
+       
+        -- 
+        
+        if os.isdir(dependencyPath) then
+            os.rmdir(dependencyPath)
+        end
+       
+        print("Extracting '" .. packagePath .. "' to '" .. dependencyPath .. "' ...")
+       
+        -- We can now unzip the package
+        zip.extract(packagePath, dependencyPath)
+
+        print("Extracted.")
+
+        -- Lets make the 'package info' it in the dependency path
+        local packageInfo = { name = packageFileName }
+   
+        io.writefile(path.join(dependencyPath, "package-info.json"), json.encode(packageInfo))
+    end
+end
+
 --
 -- Options
 --
@@ -210,9 +365,18 @@ newoption {
    default     = "external/slang"
 }
 
+newoption { 
+    trigger     = "deps",
+    description = "(Optional) If true downloads binaries defined in the deps/target-deps.json",
+    value       = "bool",
+    default     = "false",
+    allowed     = { { "true", "True"}, { "false", "False" } }
+}
+
 targetDetail = _OPTIONS["target-detail"]
 llvmPath = _OPTIONS["llvm-path"]
 slangPath = _OPTIONS["slang-path"]
+deps = _OPTIONS["deps"]
 
 if not llvmPath then
     print("llvm-path option must be set")
@@ -248,9 +412,8 @@ if getTargetDetail() == "cygwin" then
         buildoptions { "-D_GNU_SOURCE" }
 end
 
--- 
+-- We need to disable warnings for building with LLVM
 disableWarningsList = {}
-
 if isTargetWindows() then
     disableWarningsList = { "4141", "4146", "4244", "4267", "4291", "4351", "4456", "4457", "4458", "4459", "4503", "4624", "4722", 
             "4100", "4127", "4512", "4505", "4610", "4510", "4702", "4245", "4706", "4310", "4701", "4703", "4389", 
@@ -258,6 +421,18 @@ if isTargetWindows() then
             "4996" }
 else
 end
+
+platformName = ""
+if isTargetWindows() then
+    platformName = "windows-x86_64"
+else
+    platformName = "linux-x86_64"
+end
+
+if deps then
+    updateDeps(platformName)
+end
+
 
 workspace "slang-llvm"
     -- We will support debug/release configuration and x86/x64 builds.
