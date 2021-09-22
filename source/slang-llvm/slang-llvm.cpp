@@ -791,7 +791,10 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
                         symbolMap.insert(std::make_pair(mangler(func.name), JITEvaluatedSymbol::fromPointer(func.func)));
                     }
 
-                    stdcLib.define(absoluteSymbols(symbolMap));
+                    if (auto err = stdcLib.define(absoluteSymbols(symbolMap)))
+                    {
+                        return SLANG_FAIL;
+                    }
 
                     // Required or the symbols won't be found
                     jit->getMainJITDylib().addToLinkOrder(stdcLib);
@@ -800,7 +803,10 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
             ThreadSafeModule threadSafeModule(std::move(module), std::move(llvmContext));
 
-            jit->addIRModule(std::move(threadSafeModule));
+            if (auto err = jit->addIRModule(std::move(threadSafeModule)))
+            {
+                return SLANG_FAIL;
+            }
 
             outResult = new LLVMDownstreamCompileResult(diagsBuffer.m_diagnostics, std::move(jit));
             return SLANG_OK;

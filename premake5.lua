@@ -137,7 +137,8 @@ function findLibraries(basePath, inMatchName, matchFunc)
        
     for k, v in ipairs(libs) do
         -- Strip off path and extension
-        local libName = path.getbasename(v)
+        local libBaseName = path.getbasename(v)
+        local libName = libBaseName
         
         if not isTargetWindows() then
             -- If the name starts with "lib" strip it
@@ -150,6 +151,14 @@ function findLibraries(basePath, inMatchName, matchFunc)
     end
         
     return dstLibs
+end
+
+function getLLVMLibraryPath(llvmBuildPath, libraryType)
+    if isTargetWindows() then
+       return path.join(llvmBuildPath, path.join(libraryType, "lib"))
+    else
+        return path.join(llvmBuildPath, "lib")
+    end
 end
 
 -- 
@@ -192,13 +201,12 @@ function displayProgress(total, current)
     ratio = math.min(math.max(ratio, 0), 1);  
     --local percent = math.floor(ratio * 100);  
     
-    local numBars = 24
+    local numBars = 32
     local downloadedBars = math.floor(ratio * numBars)
     
-    local bar = string.rep("#", downloadedBars) .. string.rep("-", numBars - downloadedBars)
+    local bar = string.rep("#", downloadedBars) .. string.rep(".", numBars - downloadedBars)
     
-    local spinIndex = (math.floor(ratio * 10000) % 4)
-    
+    local spinIndex = (current / 1024) % 4
     local spin = string.sub("|\\-/", spinIndex + 1, spinIndex + 1)
     
     io.write("\rDownload progress (" .. spin .. ") " .. bar )
@@ -504,7 +512,7 @@ workspace "slang-llvm"
         defines { "NDEBUG" }
             
     filter { "system:linux" }
-        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed", "-ldl"}
+        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed", "-ldl", "-lstdc++", "-lpthread"}
             
 
 --
@@ -716,7 +724,7 @@ example "clang-direct"
         links { "version" }
     
     filter { "configurations:debug" }    
-        local libPath = path.join(llvmBuildPath, "Debug/lib")
+        local libPath = getLLVMLibraryPath(llvmBuildPath, "Debug")
         libdirs { libPath }
         -- We need to vary this depending on type
         links(findLibraries(libPath, "clang*", isClangLibraryName))
@@ -724,7 +732,7 @@ example "clang-direct"
         
     filter { "configurations:release" }    
         -- Can use RelWithDebInfo if lib is available to have symbols in Release
-        local libPath = path.join(llvmBuildPath, "Release/lib")
+        local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
         libdirs { libPath }
         -- We need to vary this depending on type
         links(findLibraries(libPath, "clang*", isClangLibraryName))
@@ -818,14 +826,14 @@ standardProject("slang-llvm", "source/slang-llvm")
         links { "version" } 
         
     filter { "configurations:debug" }    
-        local libPath = path.join(llvmBuildPath, "Debug/lib")
+        local libPath = getLLVMLibraryPath(llvmBuildPath, "Debug")
         libdirs { libPath }
         -- We need to vary this depending on type
         links(findLibraries(libPath, "clang*", isClangLibraryName))
         links(findLibraries(libPath, "LLVM*", isLLVMLibraryName))
         
     filter { "configurations:release" }    
-        local libPath = path.join(llvmBuildPath, "Release/lib")
+        local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
         libdirs { libPath }
         -- We need to vary this depending on type
         links(findLibraries(libPath, "clang*", isClangLibraryName))

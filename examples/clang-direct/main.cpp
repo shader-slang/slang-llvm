@@ -422,7 +422,7 @@ static SlangResult _compile()
             MangleAndInterner mangler(es, dl);
 
             // The name of the lib must be unique. Should be here as we are only thing adding libs
-            auto& stdcLibExpected = es.createJITDylib("stdc");
+            auto stdcLibExpected = es.createJITDylib("stdc");
 
             if (stdcLibExpected)
             {
@@ -431,7 +431,10 @@ static SlangResult _compile()
                 // Add all the symbolmap
                 SymbolMap symbolMap;
                 symbolMap.insert(std::make_pair(mangler("sin"), JITEvaluatedSymbol::fromPointer(static_cast<double (*)(double)>(&sin))));
-                stdcLib.define(absoluteSymbols(symbolMap));
+                if (auto err = stdcLib.define(absoluteSymbols(symbolMap)))
+                {
+                    return SLANG_FAIL;
+                }
 
                 // Required or the symbols won't be found
                 jit->getMainJITDylib().addToLinkOrder(stdcLib);
@@ -440,7 +443,10 @@ static SlangResult _compile()
 
         ThreadSafeModule threadSafeModule(std::move(module), std::move(llvmContext));
 
-        jit->addIRModule(std::move(threadSafeModule));
+        if (auto err = jit->addIRModule(std::move(threadSafeModule)))
+        {
+            return SLANG_FAIL;
+        }
 
         // Look up the JIT'd function, cast it to a function pointer, then call it.
 
