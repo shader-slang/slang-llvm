@@ -225,10 +225,13 @@ end
 -- Update dependencies
 -- 
 
-function updateDeps(platformName, jsonName)
+function updateDeps(platformName, jsonName, noProgress)
     if jsonName == nil then
         jsonName = "deps/target-deps.json"
     end
+    
+    -- Make noProgress a bool
+    noProgress = not not noProgress
     
     -- Load the json
     local result, err = readJSONFromFile(jsonName)
@@ -310,12 +313,18 @@ function updateDeps(platformName, jsonName)
         end
 
         do
-            -- Download the package
-            local result_str, response_code = http.download(url, packagePath, { progress = displayProgress })
-            
-            -- Want to move down a line (as progress stays on the same line)
-            print("")
-            
+            print("Downloading '" .. url .. "'")
+        
+            local result_str, response_code
+        
+            if noProgress then
+                result_str, response_code = http.download(url, packagePath, {})
+            else
+                result_str, response_code = http.download(url, packagePath, {progress = displayProgress})
+                -- Move down a line as progress repeatedly writes to same line
+                print("")
+            end
+             
             if result_str == "OK" then
             else
                 -- Delete what we have
@@ -346,6 +355,29 @@ function updateDeps(platformName, jsonName)
    
         io.writefile(path.join(dependencyPath, "package-info.json"), json.encode(packageInfo))
     end
+end
+
+function toBool(v)
+    if type(v) == "boolean" then 
+        return v
+    end
+    if  v == "True" or v == "true" then
+        return true
+    end
+    if v == "False" or v == "false" then
+        return false
+    end
+    -- Returns nil as an error
+    return nil
+end
+
+function getBoolOption(name)
+    local v = _OPTIONS[name]
+    local b = toBool(v)
+    if b == nil then
+        return error("Option '" .. name .. "' is '" .. v .. "' - not a valid boolean value")
+    end
+    return b
 end
 
 --
@@ -379,10 +411,19 @@ newoption {
     allowed     = { { "true", "True"}, { "false", "False" } }
 }
 
+newoption { 
+    trigger     = "no-progress",
+    description = "(Optional) If true doesn't display progress bars",
+    value       = "boolean",
+    default     = "false",
+    allowed     = { { "true", "True"}, { "false", "False" } }
+}
+
 targetDetail = _OPTIONS["target-detail"]
 llvmPath = _OPTIONS["llvm-path"]
 slangPath = _OPTIONS["slang-path"]
-deps = not not _OPTIONS["deps"]
+deps = getBoolOption("deps")
+noProgress = getBoolOption("no-progress")
 
 if not llvmPath then
     if deps or os.isdir("external/llvm") then
@@ -428,7 +469,7 @@ else
 end
 
 if deps then
-    updateDeps(platformName)
+    updateDeps(platformName, nil, noProgress)
 end
 
 -- Set up the llvm path
