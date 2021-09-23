@@ -1,10 +1,10 @@
-name: Linux Release Build
+name: Upload Release Asset - Linux
 
 on:
   push:
     # Sequence of patterns matched against refs/tags
     tags:
-    - 'slang-*' # Push events to matching slang-*, i.e. slang-llvmorg-13.0.0-rc3
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
     
 jobs:
   build:
