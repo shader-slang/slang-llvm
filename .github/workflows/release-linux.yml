@@ -1,0 +1,67 @@
+name: Linux Release Build
+
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+    - 'slang-*' # Push events to matching slang-*, i.e. slang-llvmorg-13.0.0-rc3
+    
+jobs:
+  build:
+    name: Release Build
+    # The CMake configure and build commands are platform agnostic and should work equally
+    # well on Windows or Mac.  You can convert this to a matrix build if you need
+    # cross-platform coverage.
+    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        # Might be useful to have all these combinations but for now don't build on github Actions, so use limited to a subset.
+        # configuration: ['Release', 'Debug', 'RelWithDebInfo']
+        configuration: ['Release']
+        
+    steps:   
+      - uses: actions/checkout@v2.3.4
+        with:
+          submodules: 'true'
+          fetch-depth: '0'
+
+      - name: premake
+        run: |
+          PREMAKE=external/slang-binaries/premake/premake-5.0.0-alpha16/bin/linux-64/premake5
+          chmod u+x ${PREMAKE}
+          ${PREMAKE} gmake --deps=true --no-progress=true          
+
+      - name: Build
+        run: |
+          make config=${CONFIGURATION}_x64 -j`nproc`
+          
+      - name: archive
+        id: archive
+        run: |
+          echo "achiving files..."
+          
+          PLATFORM_NAME="linux-x86_64"
+          TAG_NAME=`git describe --tags`
+          SLANG_LLVM_VERSION=${TAG_NAME#"v"}
+          
+          echo "tag:$TAG_NAME"
+          echo "slang-llvm-version:$LLVM_VERSION"
+          
+          BIN_ARCHIVE="slang-llvm-$TAG_NAME-$PLATFORM_NAME-${{matrix.configuration}}.zip"
+
+          zip "$BIN_ARCHIVE" README.md
+          zip "$BIN_ARCHIVE" LICENSE
+          zip "$BIN_ARCHIVE" -r bin/*/*/*.so
+          
+          echo "name=BINARY_ARCHIVE::$BIN_ARCHIVE"
+          echo "::set-output name=BINARY_ARCHIVE::$BIN_ARCHIVE"
+
+      - name: Upload Archive
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ steps.archive.outputs.BINARY_ARCHIVE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
