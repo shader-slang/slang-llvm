@@ -17,9 +17,8 @@ jobs:
     
     strategy:
       matrix:
-        # Might be useful to have all these combinations but for now don't build on github Actions, so use limited to a subset.
-        # configuration: ['Release', 'Debug', 'RelWithDebInfo']
-        configuration: ['Release']
+        # Might want debug once release works
+        configuration: ['release'] # , 'debug']
         
     steps:   
       - uses: actions/checkout@v2.3.4
@@ -42,6 +41,7 @@ jobs:
         run: |
           echo "achiving files..."
           
+          ARCH_NAME=`uname -p`
           PLATFORM_NAME="linux-x86_64"
           TAG_NAME=`git describe --tags`
           SLANG_LLVM_VERSION=${TAG_NAME#"v"}
