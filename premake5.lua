@@ -485,7 +485,6 @@ if (not os.isdir(llvmPath) or not os.isdir(llvmBuildPath)) then
 end
 
 
-
 workspace "slang-llvm"
     -- We will support debug/release configuration and x86/x64 builds.
     configurations { "Debug", "Release" }
@@ -529,7 +528,7 @@ workspace "slang-llvm"
         architecture "ARM"
 
     filter { "toolset:clang or gcc*" }
-        buildoptions { "-Wno-unused-parameter", "-Wno-type-limits", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-reorder", "-Wno-switch", "-Wno-return-type", "-Wno-unused-local-typedefs", "-Wno-parentheses",  "-fvisibility=hidden" , "-Wno-ignored-optimization-argument", "-Wno-unknown-warning-option", "-Wno-class-memaccess"} 
+        buildoptions { "-Wno-unused-parameter", "-Wno-type-limits", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-reorder", "-Wno-switch", "-Wno-return-type", "-Wno-unused-local-typedefs", "-Wno-parentheses",  "-fvisibility=hidden" , "-Wno-ignored-optimization-argument", "-Wno-unknown-warning-option", "-Wno-class-memaccess", "-Wno-error", "-Wno-error=comment"} 
         
     filter { "toolset:gcc*"}
         buildoptions { "-Wno-unused-but-set-variable", "-Wno-implicit-fallthrough"  }
@@ -556,7 +555,9 @@ workspace "slang-llvm"
         defines { "NDEBUG" }
             
     filter { "system:linux" }
-        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed", "-ldl", "-lstdc++", "-lpthread"}
+        buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
+        links { "pthread", "tinfo", "stdc++", "dl", "rt" }
+        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed"}
             
 
 --
