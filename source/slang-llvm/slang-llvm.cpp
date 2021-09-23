@@ -141,7 +141,7 @@ public:
     }
 
 protected:
-    ISlangUnknown* LLVMDownstreamCompileResult::getInterface(const Guid& guid);
+    ISlangUnknown* getInterface(const Guid& guid);
 
     std::unique_ptr<llvm::orc::LLJIT> m_jit;
 };
