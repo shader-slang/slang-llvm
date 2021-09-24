@@ -509,7 +509,7 @@ workspace "slang-llvm"
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     staticruntime "On"
     
-    exceptionhandling("Off")
+    --exceptionhandling("Off")
     rtti("Off")
     
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
