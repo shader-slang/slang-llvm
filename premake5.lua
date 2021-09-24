@@ -784,6 +784,39 @@ example "clang-direct"
     
     links { "core", "compiler-core" }
 
+example "link-check"
+    kind "ConsoleApp"
+    
+    exceptionhandling("Off")
+    rtti("Off")
+    pic "On"
+
+    -- We need to vary this depending on type
+    local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
+    libdirs { libPath }
+    links { "LLVMSupport" } --, "tinfo"} -- "rt", 
+
+    -- buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
+
+    includedirs {
+        -- So we can access slang.h
+        slangPath, 
+        -- For core/compiler-core
+        path.join(slangPath, "source"), 
+        -- LLVM/Clang headers
+        path.join(llvmBuildPath, "tools/clang/include"), 
+        path.join(llvmBuildPath, "include"), 
+        path.join(llvmPath, "clang/include"), 
+        path.join(llvmPath, "llvm/include")
+    }
+    
+    filter { "toolset:msc-*" }
+        -- Disable warnings that are a problem on LLVM/Clang on windows
+        disablewarnings(disableWarningsList)
+
+        -- LLVM/Clang need this system library
+        links { "version" }
+
 -- Most of the other projects have more interesting configuration going
 -- on, so let's walk through them in order of increasing complexity.
 --
