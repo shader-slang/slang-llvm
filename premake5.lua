@@ -509,9 +509,6 @@ workspace "slang-llvm"
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     staticruntime "On"
     
-    --exceptionhandling("Off")
-    rtti("Off")
-    
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     
     -- Once we've set up the common settings, we will make some tweaks
@@ -750,6 +747,9 @@ end
 --
 example "clang-direct"
     kind "ConsoleApp"
+    
+    exceptionhandling("Off")
+    rtti("Off")
     
     includedirs {
         -- So we can access slang.h
