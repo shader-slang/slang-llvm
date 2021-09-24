@@ -484,7 +484,6 @@ if (not os.isdir(llvmPath) or not os.isdir(llvmBuildPath)) then
     os.exit(-1)
 end
 
-
 workspace "slang-llvm"
     -- We will support debug/release configuration and x86/x64 builds.
     configurations { "Debug", "Release" }
