@@ -506,8 +506,15 @@ workspace "slang-llvm"
     -- C++14 
     cppdialect "C++14"
     
+    -- Exceptions have to be turned off for linking against LLVM
+    exceptionhandling("Off")
+    rtti("Off")
+    
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     staticruntime "On"
+    
+    -- Define to indicate the exceptions are disabled
+    defines { "SLANG_DISABLE_EXCEPTIONS" }
     
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     
@@ -839,6 +846,12 @@ standardProject("core", path.join(slangPath, "source/core"))
         path.join(slangPath, "source/core/slang-lz4-compression-system.cpp"),    
         path.join(slangPath, "source/core/slang-zip-file-system.cpp"),
         path.join(slangPath, "source/core/slang-deflate-compression-system.cpp"),
+        
+        -- Removed because require exception support
+        path.join(slangPath, "source/core/slang-file-system.cpp"),
+        path.join(slangPath, "source/core/slang-io.cpp"),
+        path.join(slangPath, "source/core/slang-riff.cpp"),
+        path.join(slangPath, "source/core/slang-text-io.cpp"),
     }
 
     -- For our core implementation, we want to use the most
@@ -863,11 +876,18 @@ standardProject("compiler-core", path.join(slangPath, "source/compiler-core"))
 
     links { "core" }
 
+    removefiles 
+    { 
+        -- Removed because require exception support
+        path.join(slangPath, "source/compiler-core/slang-command-line-compiler.cpp"),    
+    }
+
     -- For our core implementation, we want to use the most
     -- aggressive warning level supported by the target, and
     -- to treat every warning as an error to make sure we
     -- keep our code free of warnings.
     --
+    
     warnings "Extra"
     flags { "FatalWarnings" }    
     
