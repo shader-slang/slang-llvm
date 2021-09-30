@@ -848,10 +848,7 @@ standardProject("core", path.join(slangPath, "source/core"))
         path.join(slangPath, "source/core/slang-deflate-compression-system.cpp"),
         
         -- Removed because require exception support
-        path.join(slangPath, "source/core/slang-file-system.cpp"),
-        path.join(slangPath, "source/core/slang-io.cpp"),
-        path.join(slangPath, "source/core/slang-riff.cpp"),
-        path.join(slangPath, "source/core/slang-text-io.cpp"),
+        path.join(slangPath, "source/core/slang-token-reader.cpp"),
     }
 
     -- For our core implementation, we want to use the most
