@@ -873,12 +873,6 @@ standardProject("compiler-core", path.join(slangPath, "source/compiler-core"))
 
     links { "core" }
 
-    removefiles 
-    { 
-        -- Removed because require exception support
-        path.join(slangPath, "source/compiler-core/slang-command-line-compiler.cpp"),    
-    }
-
     -- For our core implementation, we want to use the most
     -- aggressive warning level supported by the target, and
     -- to treat every warning as an error to make sure we
