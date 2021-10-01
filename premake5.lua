@@ -103,7 +103,10 @@ end
 -- clang library
 --
 function isClangLibraryName(name)
-    return not string.startswith(name, "clang-")
+    if string.startswith(name, "clang-") or string == "clang" then
+        return false
+    end
+    return true
 end
 
 -- 
@@ -533,14 +536,16 @@ workspace "slang-llvm"
     filter { "platforms:aarch64"}
         architecture "ARM"
 
-    filter { "toolset:clang or gcc*" }
-        buildoptions { "-Wno-unused-parameter", "-Wno-type-limits", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-reorder", "-Wno-switch", "-Wno-return-type", "-Wno-unused-local-typedefs", "-Wno-parentheses",  "-fvisibility=hidden" , "-Wno-ignored-optimization-argument", "-Wno-unknown-warning-option", "-Wno-class-memaccess", "-Wno-error", "-Wno-error=comment"} 
+    filter { "toolset:clang or gcc*" }  
+        buildoptions { "-fvisibility=hidden" } -- , "-thread" }
+        -- Warnings
+        buildoptions { "-Wno-unused-parameter", "-Wno-type-limits", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-reorder", "-Wno-switch", "-Wno-return-type", "-Wno-unused-local-typedefs", "-Wno-parentheses", "-Wno-ignored-optimization-argument", "-Wno-unknown-warning-option", "-Wno-class-memaccess", "-Wno-error", "-Wno-error=comment"} 
         
     filter { "toolset:gcc*"}
         buildoptions { "-Wno-unused-but-set-variable", "-Wno-implicit-fallthrough"  }
         
     filter { "toolset:clang" }
-         buildoptions { "-Wno-deprecated-register", "-Wno-tautological-compare", "-Wno-missing-braces", "-Wno-undefined-var-template", "-Wno-unused-function", "-Wno-return-std-move"}
+        buildoptions { "-Wno-deprecated-register", "-Wno-tautological-compare", "-Wno-missing-braces", "-Wno-undefined-var-template", "-Wno-unused-function", "-Wno-return-std-move"}
         
     -- When compiling the debug configuration, we want to turn
     -- optimization off, make sure debug symbols are output,
@@ -551,7 +556,7 @@ workspace "slang-llvm"
         symbols "On"
         defines { "_DEBUG" }
     
-    -- staticruntime "Off"
+    staticruntime "On"
     
     -- For the release configuration we will turn optimizations on
     -- (we do not yet micro-manage the optimization settings)
@@ -563,9 +568,8 @@ workspace "slang-llvm"
     filter { "system:linux" }
         buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
         links { "pthread", "tinfo", "stdc++", "dl", "rt" }
-        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed"}
-            
-
+        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group"}
+                         
 --
 -- We are now going to start defining the projects, where
 -- each project builds some binary artifact (an executable,
