@@ -48,7 +48,8 @@
 package.path = package.path .. ";external/slang-binaries/lua-modules/?.lua"
 
 -- Load the slack package manager module
-slangpack = require("slangpack")
+slangPack = require("slangpack")
+slangUtil = require("slangutil")
 
 -- 
 -- Some globals needed by following functions
@@ -74,37 +75,11 @@ end
 -- Define some useful functions
 --
 
-function valueToString(o)
-    if type(o) == 'table' then
-        return tableToString(o)
-    else
-        return tostring(o)
-     end
-end
-    
-function tableToString(o)
-    local s = '{ '
-    for k,v in pairs(o) do
-        if type(k) ~= 'number' then k = '"'..k..'"' end
-        s = s .. '['..k..'] = ' .. tostring(v) .. ',\n'
-    end
-    return s .. '} '
-end
-
-function dump(o)
-    print(valueToString(o))
-end
-
 function getExecutableSuffix()
     if(os.target() == "windows") then
         return ".exe"
     end
     return ""
-end
-
-function trimPrefix(s, p)
-    local t = (s:sub(0, #p) == p) and s:sub(#p + 1) or s
-    return t
 end
 
 --
@@ -137,38 +112,6 @@ function isLLVMLibraryName(name)
     return not string.startswith(name, "LLVM-C")
 end
 
-function findLibraries(basePath, inMatchName, matchFunc)
-    local matchName = inMatchName
-    if isTargetWindows() then
-        matchName = inMatchName .. ".lib"
-    else
-        matchName = "lib" .. inMatchName .. ".a"
-    end
- 
-    local matchPath = path.join(basePath, matchName)
- 
-    local libs = os.matchfiles(matchPath)
-       
-    local dstLibs = {}   
-       
-    for k, v in ipairs(libs) do
-        -- Strip off path and extension
-        local libBaseName = path.getbasename(v)
-        local libName = libBaseName
-        
-        if not isTargetWindows() then
-            -- If the name starts with "lib" strip it
-            libName = trimPrefix(libName, "lib")
-        end
-    
-        if matchFunc == nil or matchFunc(libName) then
-            table.insert(dstLibs, libName)
-        end
-    end
-        
-    return dstLibs
-end
-
 function getLLVMLibraryPath(llvmBuildPath, libraryType)
     if isTargetWindows() then
        return path.join(llvmBuildPath, path.join(libraryType, "lib"))
@@ -177,22 +120,14 @@ function getLLVMLibraryPath(llvmBuildPath, libraryType)
     end
 end
 
--- 
--- Append (assuming 'array' table b onto a)
---
-function appendTable(a, b)  
-    for _,v in ipairs(b) do 
-        table.insert(a, v)
-    end
-end
+function findLLVMLibraries(libPath, libType)
 
---
--- Given two (array) tables returns the concatination 
---
-function concatTables(a, b)
-    a = table.table_copy(a)
-    appendTable(a, b)
-    return a
+    -- We need to vary this depending on libType
+        
+    local clangLibs = slangUtil.findLibraries(libPath, "clang*", isClangLibraryName)
+    local llvmLibs = slangUtil.findLibraries(libPath, "LLVM*", isLLVMLibraryName)
+    
+    return slangUtil.concatTables(clangLibs, llvmLibs)    
 end
 
 -- A function to return a name to place project files under 
@@ -212,34 +147,12 @@ function getBuildLocationName()
     end 
 end
 
-function toBool(v)
-    if type(v) == "boolean" then 
-        return v
-    end
-    if  v == "True" or v == "true" then
-        return true
-    end
-    if v == "False" or v == "false" then
-        return false
-    end
-    -- Returns nil as an error
-    return nil
-end
-
-function getBoolOption(name)
-    local v = _OPTIONS[name]
-    local b = toBool(v)
-    if b == nil then
-        return error("Option '" .. name .. "' is '" .. v .. "' - not a valid boolean value")
-    end
-    return b
-end
 
 --
 -- Options
 --
 
-slangpack.addOptions()
+slangPack.addOptions()
 
 newoption {
    trigger     = "target-detail",
@@ -253,6 +166,7 @@ newoption {
    description = "The path to the build directory for LLVM",
    value       = "string"
 }
+
 newoption {
    trigger     = "slang-path",
    description = "The path to the Slang, defaults to external/slang",
@@ -263,8 +177,8 @@ newoption {
 targetDetail = _OPTIONS["target-detail"]
 llvmPath = _OPTIONS["llvm-path"]
 slangPath = _OPTIONS["slang-path"]
-deps = getBoolOption("deps")
-noProgress = getBoolOption("no-progress")
+deps = slangUtil.getBoolOption("deps")
+noProgress = slangUtil.getBoolOption("no-progress")
 
 if not llvmPath then
     if deps or os.isdir("external/llvm") then
@@ -310,7 +224,7 @@ else
 end
 
 if deps then
-    slangpack.updateDeps(platformName, nil, noProgress)
+    slangPack.updateDeps(platformName, nil, noProgress)
 end
 
 -- Set up the llvm path
@@ -620,18 +534,13 @@ example "clang-direct"
     filter { "configurations:debug" }    
         local libPath = getLLVMLibraryPath(llvmBuildPath, "Debug")
         libdirs { libPath }
-        -- We need to vary this depending on type
-        links(findLibraries(libPath, "clang*", isClangLibraryName))
-        links(findLibraries(libPath, "LLVM*", isLLVMLibraryName))
+        links(findLLVMLibraries(libPath, "Debug"))
         
     filter { "configurations:release" }    
-        -- Can use RelWithDebInfo if lib is available to have symbols in Release
         local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
         libdirs { libPath }
-        -- We need to vary this depending on type
-        links(findLibraries(libPath, "clang*", isClangLibraryName))
-        links(findLibraries(libPath, "LLVM*", isLLVMLibraryName))
-    
+        links(findLLVMLibraries(libPath, "Release"))
+        
     links { "core", "compiler-core" }
 
 example "link-check"
@@ -757,14 +666,10 @@ standardProject("slang-llvm", "source/slang-llvm")
     filter { "configurations:debug" }    
         local libPath = getLLVMLibraryPath(llvmBuildPath, "Debug")
         libdirs { libPath }
-        -- We need to vary this depending on type
-        links(findLibraries(libPath, "clang*", isClangLibraryName))
-        links(findLibraries(libPath, "LLVM*", isLLVMLibraryName))
+        links(findLLVMLibraries(libPath, "Debug"))
         
     filter { "configurations:release" }    
         local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
         libdirs { libPath }
-        -- We need to vary this depending on type
-        links(findLibraries(libPath, "clang*", isClangLibraryName))
-        links(findLibraries(libPath, "LLVM*", isLLVMLibraryName)) 
+        links(findLLVMLibraries(libPath, "Release"))
 
