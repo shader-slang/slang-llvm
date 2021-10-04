@@ -567,7 +567,9 @@ workspace "slang-llvm"
             
     filter { "system:linux" }
         buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
-        links { "pthread", "tinfo", "stdc++", "dl", "rt" }
+        -- z is for zlib support
+        -- tinfo is for terminal info
+        links { "pthread", "tinfo", "stdc++", "dl", "rt", "z" }
         linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
                          
 --
