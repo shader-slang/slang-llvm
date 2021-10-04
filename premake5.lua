@@ -568,7 +568,7 @@ workspace "slang-llvm"
     filter { "system:linux" }
         buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
         links { "pthread", "tinfo", "stdc++", "dl", "rt" }
-        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group"}
+        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
                          
 --
 -- We are now going to start defining the projects, where
