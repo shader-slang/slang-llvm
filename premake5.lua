@@ -103,7 +103,10 @@ end
 -- clang library
 --
 function isClangLibraryName(name)
-    return not string.startswith(name, "clang-")
+    if string.startswith(name, "clang-") or string == "clang" then
+        return false
+    end
+    return true
 end
 
 -- 
@@ -506,8 +509,15 @@ workspace "slang-llvm"
     -- C++14 
     cppdialect "C++14"
     
+    -- Exceptions have to be turned off for linking against LLVM
+    exceptionhandling("Off")
+    rtti("Off")
+    
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     staticruntime "On"
+    
+    -- Define to indicate the exceptions are disabled
+    defines { "SLANG_DISABLE_EXCEPTIONS" }
     
     -- Statically link to the C/C++ runtime rather than create a DLL dependency.
     
@@ -526,14 +536,16 @@ workspace "slang-llvm"
     filter { "platforms:aarch64"}
         architecture "ARM"
 
-    filter { "toolset:clang or gcc*" }
-        buildoptions { "-Wno-unused-parameter", "-Wno-type-limits", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-reorder", "-Wno-switch", "-Wno-return-type", "-Wno-unused-local-typedefs", "-Wno-parentheses",  "-fvisibility=hidden" , "-Wno-ignored-optimization-argument", "-Wno-unknown-warning-option", "-Wno-class-memaccess", "-Wno-error", "-Wno-error=comment"} 
+    filter { "toolset:clang or gcc*" }  
+        buildoptions { "-fvisibility=hidden" } 
+        -- Warnings
+        buildoptions { "-Wno-unused-parameter", "-Wno-type-limits", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-reorder", "-Wno-switch", "-Wno-return-type", "-Wno-unused-local-typedefs", "-Wno-parentheses", "-Wno-ignored-optimization-argument", "-Wno-unknown-warning-option", "-Wno-class-memaccess", "-Wno-error", "-Wno-error=comment"} 
         
     filter { "toolset:gcc*"}
         buildoptions { "-Wno-unused-but-set-variable", "-Wno-implicit-fallthrough"  }
         
     filter { "toolset:clang" }
-         buildoptions { "-Wno-deprecated-register", "-Wno-tautological-compare", "-Wno-missing-braces", "-Wno-undefined-var-template", "-Wno-unused-function", "-Wno-return-std-move"}
+        buildoptions { "-Wno-deprecated-register", "-Wno-tautological-compare", "-Wno-missing-braces", "-Wno-undefined-var-template", "-Wno-unused-function", "-Wno-return-std-move"}
         
     -- When compiling the debug configuration, we want to turn
     -- optimization off, make sure debug symbols are output,
@@ -544,7 +556,7 @@ workspace "slang-llvm"
         symbols "On"
         defines { "_DEBUG" }
     
-    -- staticruntime "Off"
+    staticruntime "On"
     
     -- For the release configuration we will turn optimizations on
     -- (we do not yet micro-manage the optimization settings)
@@ -555,10 +567,11 @@ workspace "slang-llvm"
             
     filter { "system:linux" }
         buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
-        links { "pthread", "tinfo", "stdc++", "dl", "rt" }
-        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed"}
-            
-
+        -- z is for zlib support
+        -- tinfo is for terminal info
+        links { "pthread", "tinfo", "stdc++", "dl", "rt", "z" }
+        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
+                         
 --
 -- We are now going to start defining the projects, where
 -- each project builds some binary artifact (an executable,
@@ -584,7 +597,6 @@ function addSourceDir(path)
         path .. "/*.natvis",    -- Visual Studio debugger visualization files
     }
 end
-
 
 --
 -- Next we will define a helper routine that all of our
@@ -784,6 +796,37 @@ example "clang-direct"
     
     links { "core", "compiler-core" }
 
+example "link-check"
+    kind "ConsoleApp"
+    
+    pic "On"
+
+    -- We need to vary this depending on type
+    local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
+    libdirs { libPath }
+    links { "LLVMSupport" } --, "tinfo"} -- "rt", 
+
+    -- buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
+
+    includedirs {
+        -- So we can access slang.h
+        slangPath, 
+        -- For core/compiler-core
+        path.join(slangPath, "source"), 
+        -- LLVM/Clang headers
+        path.join(llvmBuildPath, "tools/clang/include"), 
+        path.join(llvmBuildPath, "include"), 
+        path.join(llvmPath, "clang/include"), 
+        path.join(llvmPath, "llvm/include")
+    }
+    
+    filter { "toolset:msc-*" }
+        -- Disable warnings that are a problem on LLVM/Clang on windows
+        disablewarnings(disableWarningsList)
+
+        -- LLVM/Clang need this system library
+        links { "version" }
+
 -- Most of the other projects have more interesting configuration going
 -- on, so let's walk through them in order of increasing complexity.
 --
@@ -803,6 +846,9 @@ standardProject("core", path.join(slangPath, "source/core"))
         path.join(slangPath, "source/core/slang-lz4-compression-system.cpp"),    
         path.join(slangPath, "source/core/slang-zip-file-system.cpp"),
         path.join(slangPath, "source/core/slang-deflate-compression-system.cpp"),
+        
+        -- Removed because require exception support
+        path.join(slangPath, "source/core/slang-token-reader.cpp"),
     }
 
     -- For our core implementation, we want to use the most
@@ -832,6 +878,7 @@ standardProject("compiler-core", path.join(slangPath, "source/compiler-core"))
     -- to treat every warning as an error to make sure we
     -- keep our code free of warnings.
     --
+    
     warnings "Extra"
     flags { "FatalWarnings" }    
     
