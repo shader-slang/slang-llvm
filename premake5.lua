@@ -120,6 +120,16 @@ function getLLVMLibraryPath(llvmBuildPath, libraryType)
     end
 end
 
+function findLLVMLibraries(libPath, libType)
+
+    -- We need to vary this depending on libType
+        
+    local clangLibs = slangUtil.findLibraries(libPath, "clang*", isClangLibraryName)
+    local llvmLibs = slangUtil.findLibraries(libPath, "LLVM*", isLLVMLibraryName)
+    
+    return slangUtil.concatTables(clangLibs, llvmLibs)    
+end
+
 -- A function to return a name to place project files under 
 -- in build directory
 --
@@ -524,18 +534,13 @@ example "clang-direct"
     filter { "configurations:debug" }    
         local libPath = getLLVMLibraryPath(llvmBuildPath, "Debug")
         libdirs { libPath }
-        -- We need to vary this depending on type
-        links(slangUtil.findLibraries(libPath, "clang*", isClangLibraryName))
-        links(slangUtil.findLibraries(libPath, "LLVM*", isLLVMLibraryName))
+        links(findLLVMLibraries(libPath, "Debug"))
         
     filter { "configurations:release" }    
-        -- Can use RelWithDebInfo if lib is available to have symbols in Release
         local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
         libdirs { libPath }
-        -- We need to vary this depending on type
-        links(slangUtil.findLibraries(libPath, "clang*", isClangLibraryName))
-        links(slangUtil.findLibraries(libPath, "LLVM*", isLLVMLibraryName))
-    
+        links(findLLVMLibraries(libPath, "Release"))
+        
     links { "core", "compiler-core" }
 
 example "link-check"
@@ -661,14 +666,10 @@ standardProject("slang-llvm", "source/slang-llvm")
     filter { "configurations:debug" }    
         local libPath = getLLVMLibraryPath(llvmBuildPath, "Debug")
         libdirs { libPath }
-        -- We need to vary this depending on type
-        links(slangUtil.findLibraries(libPath, "clang*", isClangLibraryName))
-        links(slangUtil.findLibraries(libPath, "LLVM*", isLLVMLibraryName))
+        links(findLLVMLibraries(libPath, "Debug"))
         
     filter { "configurations:release" }    
         local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
         libdirs { libPath }
-        -- We need to vary this depending on type
-        links(slangUtil.findLibraries(libPath, "clang*", isClangLibraryName))
-        links(slangUtil.findLibraries(libPath, "LLVM*", isLLVMLibraryName)) 
+        links(findLLVMLibraries(libPath, "Release"))
 
