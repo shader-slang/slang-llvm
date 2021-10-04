@@ -537,7 +537,7 @@ workspace "slang-llvm"
         architecture "ARM"
 
     filter { "toolset:clang or gcc*" }  
-        buildoptions { "-fvisibility=hidden" } -- , "-thread" }
+        buildoptions { "-fvisibility=hidden" } 
         -- Warnings
         buildoptions { "-Wno-unused-parameter", "-Wno-type-limits", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-reorder", "-Wno-switch", "-Wno-return-type", "-Wno-unused-local-typedefs", "-Wno-parentheses", "-Wno-ignored-optimization-argument", "-Wno-unknown-warning-option", "-Wno-class-memaccess", "-Wno-error", "-Wno-error=comment"} 
         
@@ -595,7 +595,6 @@ function addSourceDir(path)
         path .. "/*.natvis",    -- Visual Studio debugger visualization files
     }
 end
-
 
 --
 -- Next we will define a helper routine that all of our
@@ -759,9 +758,6 @@ end
 example "clang-direct"
     kind "ConsoleApp"
     
-    exceptionhandling("Off")
-    rtti("Off")
-    
     includedirs {
         -- So we can access slang.h
         slangPath, 
@@ -801,8 +797,6 @@ example "clang-direct"
 example "link-check"
     kind "ConsoleApp"
     
-    exceptionhandling("Off")
-    rtti("Off")
     pic "On"
 
     -- We need to vary this depending on type
