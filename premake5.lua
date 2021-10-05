@@ -77,6 +77,7 @@ end
 -- the ones in LLVM-C, then the registering of targets is *in* the LLVM-C impl.
 --
 -- So to avoid this we, just remove from linked libraries
+--
 function isLLVMLibraryName(name)
     return not string.startswith(name, "LLVM-C")
 end
