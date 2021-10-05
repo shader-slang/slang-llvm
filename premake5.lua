@@ -37,19 +37,19 @@
 -- apply across all projects.
 --
 
--- Useful to determine which version of LUA has been embedded on premake. 
--- Currently that's 5.3
--- print( _G._VERSION )
-
 --
 -- Add the package path for slang-pack
 -- The question mark is there the name of the module is inserted.
 ---
-package.path = package.path .. ";external/slang-binaries/lua-modules/?.lua"
+
+-- local modulePath = "external/slang-binaries/lua-modules/?.lua"
+local modulePath = "../slang-binaries-jsmall-nvidia/lua-modules/?.lua"
+
+package.path = package.path .. ";" .. modulePath
 
 -- Load the slack package manager module
-slangPack = require("slangpack")
-slangUtil = require("slangutil")
+slangPack = require("slang-pack")
+slangUtil = require("slang-util")
 
 -- 
 -- Some globals needed by following functions
@@ -151,8 +151,6 @@ end
 --
 -- Options
 --
-
-slangPack.addOptions()
 
 newoption {
    trigger     = "target-detail",
