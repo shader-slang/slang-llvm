@@ -42,45 +42,14 @@
 -- The question mark is there the name of the module is inserted.
 ---
 
--- local modulePath = "external/slang-binaries/lua-modules/?.lua"
-local modulePath = "../slang-binaries-jsmall-nvidia/lua-modules/?.lua"
+local modulePath = "external/slang-binaries/lua-modules/?.lua"
+--local modulePath = "../slang-binaries-jsmall-nvidia/lua-modules/?.lua"
 
 package.path = package.path .. ";" .. modulePath
 
 -- Load the slack package manager module
 slangPack = require("slang-pack")
 slangUtil = require("slang-util")
-
--- 
--- Some globals needed by following functions
---
-
-g_isTargetWindows = false
-g_targetDetail = nil
-
-function initGlobals(inTargetDetail)
-    g_targetDetail = inTargetDetail
-    g_isTargetWindows = (os.target() == "windows") and not (inTargetDetail == "mingw" or inTargetDetail == "cygwin")
-end
-
-function isTargetWindows()
-    return g_isTargetWindows
-end
-
-function getTargetDetail()
-    return g_targetDetail
-end
-
--- 
--- Define some useful functions
---
-
-function getExecutableSuffix()
-    if(os.target() == "windows") then
-        return ".exe"
-    end
-    return ""
-end
 
 --
 -- It turns out there are 'libraries' inside LLVM/Clang which are not 
@@ -112,52 +81,27 @@ function isLLVMLibraryName(name)
     return not string.startswith(name, "LLVM-C")
 end
 
-function getLLVMLibraryPath(llvmBuildPath, libraryType)
-    if isTargetWindows() then
+function getLLVMLibraryPath(targetInfo, llvmBuildPath, libraryType)
+    if targetInfo.isWindows then
        return path.join(llvmBuildPath, path.join(libraryType, "lib"))
     else
         return path.join(llvmBuildPath, "lib")
     end
 end
 
-function findLLVMLibraries(libPath, libType)
+function findLLVMLibraries(targetInfo, libPath, libType)
 
     -- We need to vary this depending on libType
         
-    local clangLibs = slangUtil.findLibraries(libPath, "clang*", isClangLibraryName)
-    local llvmLibs = slangUtil.findLibraries(libPath, "LLVM*", isLLVMLibraryName)
+    local clangLibs = slangUtil.findLibraries(targetInfo, libPath, "clang*", isClangLibraryName)
+    local llvmLibs = slangUtil.findLibraries(targetInfo, libPath, "LLVM*", isLLVMLibraryName)
     
     return slangUtil.concatTables(clangLibs, llvmLibs)    
 end
 
--- A function to return a name to place project files under 
--- in build directory
---
--- This is complicated in so far as when this is used (with location for example)
--- we can't use Tokens 
--- https://github.com/premake/premake-core/wiki/Tokens
-
-function getBuildLocationName()
-    if not not getTargetDetail() then
-        return getTargetDetail()
-    elseif isTargetWindows() then
-        return "visual-studio"
-    else
-        return os.target()
-    end 
-end
-
-
 --
 -- Options
 --
-
-newoption {
-   trigger     = "target-detail",
-   description = "(Optional) More specific target information",
-   value       = "string",
-   allowed     = { {"cygwin"}, {"mingw"} }
-}
 
 newoption {
    trigger     = "llvm-path",
@@ -172,11 +116,18 @@ newoption {
    default     = "external/slang"
 }
 
-targetDetail = _OPTIONS["target-detail"]
+-- Determine the target info
+
+targetInfo = slangUtil.getTargetInfo()
+
+--
+-- Download any dependencies. Will only do this if --deps=true is set
+--
+
+slangPack.maybeUpdateDependencies(targetInfo.name)
+
 llvmPath = _OPTIONS["llvm-path"]
 slangPath = _OPTIONS["slang-path"]
-deps = slangUtil.getBoolOption("deps")
-noProgress = slangUtil.getBoolOption("no-progress")
 
 if not llvmPath then
     if deps or os.isdir("external/llvm") then
@@ -187,48 +138,10 @@ if not llvmPath then
     end
 end
 
--- Init globals used for setting up projects
-initGlobals(targetDetail)
-
-targetName = "%{cfg.system}-%{cfg.platform:lower()}"
-
-if not (getTargetDetail() == nil) then
-    targetName = getTargetDetail() .. "-%{cfg.platform:lower()}"
-end
-
--- This is needed for gcc, for the 'fileno' functions on cygwin
--- _GNU_SOURCE makes realpath available in gcc
-if getTargetDetail() == "cygwin" then
-    buildoptions { "-D_POSIX_SOURCE" }
-    filter { "toolset:gcc*" }
-        buildoptions { "-D_GNU_SOURCE" }
-end
-
--- We need to disable warnings for building with LLVM
-disableWarningsList = {}
-if isTargetWindows() then
-    disableWarningsList = { "4141", "4146", "4244", "4267", "4291", "4351", "4456", "4457", "4458", "4459", "4503", "4624", "4722", 
-            "4100", "4127", "4512", "4505", "4610", "4510", "4702", "4245", "4706", "4310", "4701", "4703", "4389", 
-            "4611", "4805", "4204", "4577", "4091", "4592", "4319", "4709", "4324",
-            "4996" }
-else
-end
-
-platformName = ""
-if isTargetWindows() then
-    platformName = "windows-x86_64"
-else
-    platformName = "linux-x86_64"
-end
-
-if deps then
-    slangPack.updateDeps(platformName, nil, noProgress)
-end
-
--- Set up the llvm path
+-- Set up the llvm build path
 
 llvmBuildPath = llvmPath .. "/build"
-if (isTargetWindows()) then
+if targetInfo.isWindows then
     llvmBuildPath = llvmPath .. "/build-x64"
 end
 
@@ -236,6 +149,27 @@ if (not os.isdir(llvmPath) or not os.isdir(llvmBuildPath)) then
     print("Need --llvm-path set to the directory root of LLVM project.")
     os.exit(-1)
 end
+
+-- This is needed for gcc, for the 'fileno' functions on cygwin
+-- _GNU_SOURCE makes realpath available in gcc
+if targetInfo.targetDetail == "cygwin" then
+    buildoptions { "-D_POSIX_SOURCE" }
+    filter { "toolset:gcc*" }
+        buildoptions { "-D_GNU_SOURCE" }
+end
+
+-- We need to disable warnings for building with LLVM
+disableWarningsList = {}
+if targetInfo.isWindows then
+    disableWarningsList = { "4141", "4146", "4244", "4267", "4291", "4351", "4456", "4457", "4458", "4459", "4503", "4624", "4722", 
+            "4100", "4127", "4512", "4505", "4610", "4510", "4702", "4245", "4706", "4310", "4701", "4703", "4389", 
+            "4611", "4805", "4204", "4577", "4091", "4592", "4319", "4709", "4324",
+            "4996" }
+else
+end
+
+
+
 
 workspace "slang-llvm"
     -- We will support debug/release configuration and x86/x64 builds.
@@ -254,7 +188,7 @@ workspace "slang-llvm"
     
     -- The output binary directory will be derived from the OS
     -- and configuration options, e.g. `bin/windows-x64/debug/`
-    targetdir("bin/" .. targetName .. "/%{cfg.buildcfg:lower()}")
+    targetdir("bin/" .. targetInfo.tokenName .. "/%{cfg.buildcfg:lower()}")
 
     -- C++14 
     cppdialect "C++14"
@@ -386,14 +320,14 @@ function baseProject(name, sourceDir)
 
     -- Location could do with a better name than 'other' - but it seems as if %{cfg.buildcfg:lower()} and similar variables
     -- is not available for location to expand. 
-    location("build/" .. getBuildLocationName() .. "/" .. name)
+    location("build/" .. slangUtil.getBuildLocationName(targetInfo) .. "/" .. name)
 
     -- The intermediate ("object") directory will use a similar
     -- naming scheme to the output directory, but will also use
     -- the project name to avoid cases where multiple projects
     -- have source files with the same name.
     --
-    objdir("intermediate/" .. targetName .. "/%{cfg.buildcfg:lower()}/%{prj.name}")
+    objdir("intermediate/" .. targetInfo.tokenName .. "/%{cfg.buildcfg:lower()}/%{prj.name}")
     
     -- All of our projects are written in C++.
     --
@@ -530,14 +464,14 @@ example "clang-direct"
         links { "version" }
     
     filter { "configurations:debug" }    
-        local libPath = getLLVMLibraryPath(llvmBuildPath, "Debug")
+        local libPath = getLLVMLibraryPath(targetInfo, llvmBuildPath, "Debug")
         libdirs { libPath }
-        links(findLLVMLibraries(libPath, "Debug"))
+        links(findLLVMLibraries(targetInfo, libPath, "Debug"))
         
     filter { "configurations:release" }    
-        local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
+        local libPath = getLLVMLibraryPath(targetInfo, llvmBuildPath, "Release")
         libdirs { libPath }
-        links(findLLVMLibraries(libPath, "Release"))
+        links(findLLVMLibraries(targetInfo, libPath, "Release"))
         
     links { "core", "compiler-core" }
 
@@ -547,7 +481,7 @@ example "link-check"
     pic "On"
 
     -- We need to vary this depending on type
-    local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
+    local libPath = getLLVMLibraryPath(targetInfo, llvmBuildPath, "Release")
     libdirs { libPath }
     links { "LLVMSupport" } --, "tinfo"} -- "rt", 
 
@@ -604,7 +538,7 @@ standardProject("core", path.join(slangPath, "source/core"))
     warnings "Extra"
     flags { "FatalWarnings" }
     
-    if isTargetWindows() then
+    if targetInfo.isWindows then
         addSourceDir(path.join(slangPath, "source/core/windows"))
     else
         addSourceDir(path.join(slangPath, "source/core/unix"))
@@ -627,7 +561,7 @@ standardProject("compiler-core", path.join(slangPath, "source/compiler-core"))
     warnings "Extra"
     flags { "FatalWarnings" }    
     
-    if isTargetWindows() then
+    if targetInfo.isWindows then
         addSourceDir(path.join(slangPath, "source/compiler-core/windows"))
     else
         addSourceDir(path.join(slangPath, "source/compiler-core/unix"))
@@ -662,12 +596,12 @@ standardProject("slang-llvm", "source/slang-llvm")
         links { "version" } 
         
     filter { "configurations:debug" }    
-        local libPath = getLLVMLibraryPath(llvmBuildPath, "Debug")
+        local libPath = getLLVMLibraryPath(targetInfo, llvmBuildPath, "Debug")
         libdirs { libPath }
-        links(findLLVMLibraries(libPath, "Debug"))
+        links(findLLVMLibraries(targetInfo, libPath, "Debug"))
         
     filter { "configurations:release" }    
-        local libPath = getLLVMLibraryPath(llvmBuildPath, "Release")
+        local libPath = getLLVMLibraryPath(targetInfo, llvmBuildPath, "Release")
         libdirs { libPath }
-        links(findLLVMLibraries(libPath, "Release"))
+        links(findLLVMLibraries(targetInfo, libPath, "Release"))
 
