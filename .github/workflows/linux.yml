@@ -34,4 +34,4 @@ jobs:
 
       - name: Build
         run: |
-          make config=${{matrix.configuration}}_x64 verbose=1 -j`nproc`
+          make config=${{matrix.configuration}}_x64 -j`nproc`

@@ -143,7 +143,7 @@ end
 
 llvmBuildPath = llvmPath .. "/build"
 if targetInfo.isWindows then
-    llvmBuildPath = llvmPath .. "/build-x64"
+    llvmBuildPath = llvmPath .. "/build-" .. slangUtil.getVisualStudioPlatformName(targetInfo.arch)
 end
 
 if (not os.isdir(llvmPath) or not os.isdir(llvmBuildPath)) then
@@ -168,9 +168,6 @@ if targetInfo.isWindows then
             "4996" }
 else
 end
-
-
-
 
 workspace "slang-llvm"
     -- We will support debug/release configuration and x86/x64 builds.
