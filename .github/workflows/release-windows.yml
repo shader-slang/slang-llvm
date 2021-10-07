@@ -24,7 +24,7 @@ jobs:
         uses: microsoft/setup-msbuild@v1
       - name: premake
         run:
-          .\premake.bat vs2019 --deps=true --no-progress=true
+          .\premake.bat vs2019 --deps=true --no-progress=true --arch=${{matrix.platform}}
       - name: msbuild
         run:
           MSBuild.exe slang-llvm.sln -v:m -m -property:Configuration=${{matrix.configuration}} -property:Platform=${{matrix.platform}} -property:WindowsTargetPlatformVersion=10.0.19041.0
