@@ -17,6 +17,7 @@
 bin/
 intermediate/
 external/
+downloads/
 build/
 
 build.*/
