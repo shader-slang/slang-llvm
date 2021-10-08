@@ -51,6 +51,10 @@ package.path = package.path .. ";" .. modulePath
 slangPack = require("slang-pack")
 slangUtil = require("slang-util")
 
+-- Load the dependencies from the json file
+
+deps = slangPack.loadDependencies("deps/target-deps.json")
+
 --
 -- It turns out there are 'libraries' inside LLVM/Clang which are not 
 -- part of linking with clang, and example would be "clang-interpreter.lib"
@@ -104,51 +108,25 @@ end
 -- Options
 --
 
-newoption {
-   trigger     = "llvm-path",
-   description = "The path to the build directory for LLVM",
-   value       = "string"
-}
-
-newoption {
-   trigger     = "slang-path",
-   description = "The path to the Slang, defaults to external/slang",
-   value       = "string",
-   default     = "external/slang"
-}
-
 -- Determine the target info
 
 targetInfo = slangUtil.getTargetInfo()
 
 --
--- Download any dependencies. Will only do this if --deps=true is set
+-- Update the dependencies for the target
 --
 
-slangPack.maybeUpdateDependencies(targetInfo.name)
+deps:update(targetInfo.name)
 
-llvmPath = _OPTIONS["llvm-path"]
-slangPath = _OPTIONS["slang-path"]
+-- Get the paths for the dependencies
 
-if not llvmPath then
-    if deps or os.isdir("external/llvm") then
-        llvmPath = "external/llvm"
-    else
-        print("llvm-path option must be set, external/llvm isn't available")
-        os.exit(-1)
-    end
-end
+llvmPath = deps:getPath("llvm")
+slangPath = deps:getPath("slang")
 
 -- Set up the llvm build path
-
 llvmBuildPath = llvmPath .. "/build"
 if targetInfo.isWindows then
     llvmBuildPath = llvmPath .. "/build-" .. slangUtil.getVisualStudioPlatformName(targetInfo.arch)
-end
-
-if (not os.isdir(llvmPath) or not os.isdir(llvmBuildPath)) then
-    print("Need --llvm-path set to the directory root of LLVM project.")
-    os.exit(-1)
 end
 
 -- This is needed for gcc, for the 'fileno' functions on cygwin

@@ -11,6 +11,14 @@
                     "windows-x86" : "llvm-tot-18-win32-Release.zip",
                     "linux-x86_64" : "llvm-tot-18-linux-x86_64-Release.zip"
                 }
+            },
+            {
+                "name" : "slang-binaries",
+                "type" : "submodule"
+            },
+            {
+                "name" : "slang",
+                "type" : "submodule"
             }
         ]
     }
