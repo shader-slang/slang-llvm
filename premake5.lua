@@ -51,9 +51,9 @@ package.path = package.path .. ";" .. modulePath
 slangPack = require("slang-pack")
 slangUtil = require("slang-util")
 
--- Load the json dependencies
+-- Load the dependencies from the json file
 
-packProj = slangPack.loadProject()
+deps = slangPack.loadDependencies("deps/target-deps.json")
 
 --
 -- It turns out there are 'libraries' inside LLVM/Clang which are not 
@@ -113,13 +113,15 @@ end
 targetInfo = slangUtil.getTargetInfo()
 
 --
--- Update the dependencies
+-- Update the dependencies for the target
 --
 
-slangPack.updateDependencies(targetInfo.name, packProj)
+deps:update(targetInfo.name)
 
-llvmPath = packProj:getDependencyPath("llvm")
-slangPath = packProj:getDependencyPath("slang")
+-- Get the paths for the dependencies
+
+llvmPath = deps:getPath("llvm")
+slangPath = deps:getPath("slang")
 
 -- Set up the llvm build path
 llvmBuildPath = llvmPath .. "/build"
