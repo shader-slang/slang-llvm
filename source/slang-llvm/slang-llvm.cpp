@@ -808,6 +808,11 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
                 return SLANG_FAIL;
             }
 
+            if (auto err = jit->initialize(jit->getMainJITDylib()))
+            {
+                return SLANG_FAIL;
+            }
+
             outResult = new LLVMDownstreamCompileResult(diagsBuffer.m_diagnostics, std::move(jit));
             return SLANG_OK;
         }

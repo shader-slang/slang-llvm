@@ -137,9 +137,14 @@ public:
 };
 
 static const char cppSource[] =
-    "extern \"C\" double sin(double);\n "
-    "extern \"C\" double doSin(double f) { return sin(f); }\n"
-    "extern \"C\" int add(int a, int b) { return a + b; } int main() { return 0; }";
+"struct V2i { int x, y; };\n"
+"V2i make_V2i(int inX, int inY) { return V2i{inX, inY}; }\n"
+"static const V2i g_vecs[] = { make_V2i(1, 2), make_V2i(2, 3), make_V2i(3, 4) };\n"
+"extern \"C\" double sin(double);\n "
+"extern \"C\" double doSin(double f) { return sin(f); }\n"
+"extern \"C\" int add(int a, int b) { return a + b; } int main() { return 0; }\n"
+"static const int g_someValues[] = { 1, 2, 3 };\n"
+"extern \"C\" int getValue(int v) { return g_vecs[v].x; } \n";
 
 static SlangResult _compile()
 {
@@ -209,6 +214,8 @@ static SlangResult _compile()
     //action = frontend::ActionKind::EmitObj;
     //action = frontend::ActionKind::EmitAssembly;
 
+    const InputKind inputKind(Language::CXX, InputKind::Format::Source);
+
     {
         auto& opts = invocation.getFrontendOpts();
 
@@ -217,20 +224,12 @@ static SlangResult _compile()
         // not super surprising as one isn't set, but it's not clear how one would be set when the input is a memory buffer.
         // For Slang usage, this probably isn't an issue, because it's *output* typically holds #line directives.
         {
-            InputKind inputKind(Language::CXX, InputKind::Format::Source);
             FrontendInputFile inputFile(*sourceBuffer, inputKind);
 
             opts.Inputs.push_back(inputFile);
         }
 
         opts.ProgramAction = action;
-    }
-
-    {
-        auto opts = invocation.getLangOpts();
-        opts->Bool = 1;
-        opts->CPlusPlus = 1;
-        opts->LangStd = LangStandard::Kind::lang_cxx11;
     }
 
     {
@@ -255,6 +254,19 @@ static SlangResult _compile()
 
         targetTriple = llvm::Triple(opts.Triple);
     }
+
+
+
+    {
+        std::vector<std::string> includes;
+
+        const auto langStd = LangStandard::Kind::lang_cxx14;;
+
+        auto opts = invocation.getLangOpts();
+
+        clang::CompilerInvocation::setLangDefaults(*opts, inputKind, targetTriple, includes, langStd);
+    }
+
 
     {
         auto& opts = invocation.getCodeGenOpts();
@@ -340,6 +352,11 @@ static SlangResult _compile()
 
         if (!compileSucceeded || diagsBuffer.hasError())
         {
+            for (const auto& diag : diagsBuffer.m_entries)
+            {
+                printf("%s\n", diag.text.getBuffer());
+            }
+
             return SLANG_FAIL;
         }
     }
@@ -448,6 +465,11 @@ static SlangResult _compile()
             return SLANG_FAIL;
         }
 
+        if (auto err = jit->initialize(jit->getMainJITDylib()))
+        {
+            return SLANG_FAIL;
+        }
+
         // Look up the JIT'd function, cast it to a function pointer, then call it.
 
         auto addExpected = jit->lookup("add");
@@ -473,6 +495,19 @@ static SlangResult _compile()
 
             SLANG_RELEASE_ASSERT(result == ::sin(0.5));
         }
+
+        auto getValueExpected = jit->lookup("getValue");
+        if (getValueExpected)
+        {
+            auto getValue = std::move(*getValueExpected);
+            typedef int (*Func)(int);
+            Func func = (Func)getValue.getAddress();
+
+            const int result = func(2);
+
+            SLANG_RELEASE_ASSERT(result == 3);
+        }
+
     }
 
     return SLANG_OK;
