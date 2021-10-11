@@ -22,6 +22,18 @@ Once this repo has been cloned, it is neccessary to get the dependencies needed 
 % git submodule update --init
 ```
 
+## Requirements
+
+On Ubuntu 18.04 zlib may need to be installed...
+
+```
+sudo apt-get install zlib1g-dev
+```
+
+If zlib isn't available `-lz` on the link command line will fail.
+
+zlib appears to be installed by default on Ubuntu 20.04
+
 ## Premake
 
 Slang-llvm uses the tool [`premake5`](https://premake.github.io/) in order to generate projects that can be built on different targets. On Linux premake will generate Makefile/s and on windows it will generate a Visual Studio solution. Information on invoking premake for different kinds of targets can be found [here](https://github.com/premake/premake-core/wiki/Using-Premake).
