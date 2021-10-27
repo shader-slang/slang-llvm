@@ -31,4 +31,4 @@ jobs:
 
       - name: Build
         run: |
-          make config=${{matrix.configuration}}_x64 -j`nproc`
+          make config=${{matrix.configuration}}_x64 -j`sysctl -n hw.ncpu`
