@@ -1,4 +1,4 @@
-name: Linux Build CI
+name: MacOS Build CI
 
 on:
   push:
@@ -8,9 +8,9 @@ on:
     
 jobs:
   build:
-    name: Linux Build CI
+    name: MacOS Build CI
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-    runs-on: ubuntu-18.04
+    runs-on: macos-latest
     
     strategy:
       matrix:
@@ -25,7 +25,7 @@ jobs:
 
       - name: premake
         run: |
-          PREMAKE=external/slang-binaries/premake/premake-5.0.0-alpha16/bin/linux-64/premake5
+          PREMAKE=external/slang-binaries/premake/premake-5.0.0-alpha16/bin/osx/premake5
           chmod u+x ${PREMAKE}
           ${PREMAKE} gmake --deps=true --no-progress=true          
 

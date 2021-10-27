@@ -1,4 +1,4 @@
-name: Upload Asset - Linux
+name: Upload Asset - MacOS
 
 on:
   push:
@@ -8,10 +8,9 @@ on:
     
 jobs:
   build:
-    name: Upload Asset - Linux
+    name: Upload Asset - MacOS
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-    # runs-on: ubuntu-latest
-    runs-on: ubuntu-18.04
+    runs-on: macos-latest
     
     strategy:
       matrix:
@@ -26,7 +25,7 @@ jobs:
 
       - name: premake
         run: |
-          PREMAKE=external/slang-binaries/premake/premake-5.0.0-alpha16/bin/linux-64/premake5
+          PREMAKE=external/slang-binaries/premake/premake-5.0.0-alpha16/bin/osx/premake5
           chmod u+x ${PREMAKE}
           ${PREMAKE} gmake --deps=true --no-progress=true          
 
@@ -40,7 +39,7 @@ jobs:
           echo "achiving files..."
           
           ARCH_NAME=`uname -p`
-          PLATFORM_NAME="linux-x86_64"
+          PLATFORM_NAME="macosx-x86_64"
           TAG_NAME=`git describe --tags`
           SLANG_LLVM_VERSION=${TAG_NAME#"v"}
           
@@ -51,7 +50,7 @@ jobs:
 
           zip "$BIN_ARCHIVE" README.md
           zip "$BIN_ARCHIVE" LICENSE
-          zip "$BIN_ARCHIVE" -r bin/*/*/*.so
+          zip "$BIN_ARCHIVE" -r bin/*/*/*.dylib
           
           echo "name=BINARY_ARCHIVE::$BIN_ARCHIVE"
           echo "::set-output name=BINARY_ARCHIVE::$BIN_ARCHIVE"
