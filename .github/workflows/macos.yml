@@ -27,7 +27,7 @@ jobs:
         run: |
           PREMAKE=external/slang-binaries/premake/premake-5.0.0-alpha16/bin/osx/premake5
           chmod u+x ${PREMAKE}
-          ${PREMAKE} gmake --deps=true --no-progress=true          
+          ${PREMAKE} gmake --deps=true --no-progress=true --cc=clang    
 
       - name: Build
         run: |

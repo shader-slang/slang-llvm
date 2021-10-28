@@ -237,7 +237,7 @@ workspace "slang-llvm"
         -- z is for zlib support
         -- ncurses is for terminal info
         links { "pthread", "ncurses", "stdc++" } -- , "dl", "rt", "z" }
-        linkoptions{  "-Wl,-rpath,'$$ORIGIN'" }
+        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--start-group" }
                  
 --
 -- We are now going to start defining the projects, where
