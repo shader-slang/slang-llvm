@@ -235,8 +235,8 @@ workspace "slang-llvm"
     filter { "system:macosx" }
         --buildoptions { "-ffunction-sections", "-fdata-sections" }
         -- z is for zlib support
-        -- tinfo is for terminal info
-        links { "pthread", "tinfo", "stdc++", "dl", "rt", "z" }
+        -- ncurses is for terminal info
+        links { "pthread", "ncurses", "stdc++" } -- , "dl", "rt", "z" }
         linkoptions{  "-Wl,-rpath,'$$ORIGIN'" }
                  
 --
