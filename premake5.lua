@@ -231,7 +231,14 @@ workspace "slang-llvm"
         -- tinfo is for terminal info
         links { "pthread", "tinfo", "stdc++", "dl", "rt", "z" }
         linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
-                         
+                 
+    filter { "system:macosx" }
+        buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
+        -- z is for zlib support
+        -- tinfo is for terminal info
+        links { "pthread", "tinfo", "stdc++", "dl", "rt", "z" }
+        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
+                 
 --
 -- We are now going to start defining the projects, where
 -- each project builds some binary artifact (an executable,
