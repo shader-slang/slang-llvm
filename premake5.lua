@@ -237,7 +237,7 @@ workspace "slang-llvm"
         -- z is for zlib support
         -- tinfo is for terminal info
         links { "pthread", "tinfo", "stdc++", "dl", "rt", "z" }
-        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
+        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-undefined,--start-group" }
                  
 --
 -- We are now going to start defining the projects, where
