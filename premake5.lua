@@ -94,7 +94,7 @@ function getLLVMLibraryPath(targetInfo, llvmBuildPath, libraryType)
     end
 end
 
-function findLLVMLibraries(targetInfo, libPath, libType)
+function findLLVMLibrariesFromSearch(targetInfo, libPath, libType)
 
     -- We need to vary this depending on libType
         
@@ -102,6 +102,40 @@ function findLLVMLibraries(targetInfo, libPath, libType)
     local llvmLibs = slangUtil.findLibraries(targetInfo, libPath, "LLVM*", isLLVMLibraryName)
     
     return slangUtil.concatTables(clangLibs, llvmLibs)    
+end
+
+function findLLVMLibrariesFromConfig()
+    -- Currently this only works on linux and macosx
+   
+    local llvmConfigPath = "external/llvm/build/bin/llvm-config"
+    os.execute("chmod u+x " .. llvmConfigPath)
+    
+    local libsString = os.outputof(llvmConfigPath .. " --libs")
+    
+    -- We now want to turn into a table. Each library name is prefixed with -l
+    local libsArray = slangUtil.splitString(libsString)
+    
+    local libs = {}
+    for k, prefixedLib in ipairs(libsArray) do
+        local lib = string.sub(prefixedLib, 3)
+        table.insert(libs, lib)
+    end
+    
+    return libs
+end
+
+function findLLVMLibraries(targetInfo, libPath, libType)
+    if os.host() == "macosx" then
+        -- 
+        -- On OSX it appears --start-group doesn't work, so we use llvm-config
+        -- https://stackoverflow.com/questions/28009290/linker-ld-on-os-x-how-to-use-wl-start-group-and-end-group
+        -- 
+        -- This relies on llvm-config being available in the llvm-project package        
+        --
+        return findLLVMLibrariesFromConfig()
+    else
+        return findLLVMLibrariesFromSearch(targetInfo, libPath, libType)
+    end
 end
 
 --
@@ -232,12 +266,13 @@ workspace "slang-llvm"
         links { "pthread", "tinfo", "stdc++", "dl", "rt", "z" }
         linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
                  
+                 
     filter { "system:macosx" }
         --buildoptions { "-ffunction-sections", "-fdata-sections" }
         -- z is for zlib support
         -- ncurses is for terminal info
         links { "pthread", "ncurses", "stdc++" } -- , "dl", "rt", "z" }
-        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--start-group" }
+        linkoptions{ "-Wl,-rpath,'$$ORIGIN'" }
                  
 --
 -- We are now going to start defining the projects, where
