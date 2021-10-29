@@ -137,6 +137,14 @@ function findLLVMLibrariesFromConfig()
     
     -- TODO(JS): This isn't right, because we need the clang dependencies to be ordered correctly
     
+    -- From this link 
+    -- https://stackoverflow.com/questions/45135/why-does-the-order-in-which-libraries-are-linked-sometimes-cause-errors-in-gcc
+    -- It talks about cyclic links and therefore wanting to specify libraries multiple times
+    -- Note that in the ld man page we have
+    -- "Unlike traditional linkers, ld will continually search a static library while linking. There is no need to specify a static library multiple times on the command line"
+    -- https://www.unix.com/man-page/OSX/1/ld/
+    -- Seems to imply that the order of the static libraries is *not* important?
+     
     local clangLibs = slangUtil.findLibraries(targetInfo, libPath, "clang*", isClangLibraryName)
     
     return slangUtil.concatTables(clangLibs, llvmLibs)    
