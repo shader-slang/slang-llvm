@@ -145,9 +145,7 @@ function findLLVMLibrariesFromConfig()
     -- https://www.unix.com/man-page/OSX/1/ld/
     -- Seems to imply that the order of the static libraries is *not* important?
      
-    local clangLibs = slangUtil.findLibraries(targetInfo, libPath, "clang*", isClangLibraryName)
-    
-    return slangUtil.concatTables(clangLibs, llvmLibs)    
+    return llvmLibs
 end
 
 function findLLVMLibraries(targetInfo, libPath, libType)
@@ -158,7 +156,10 @@ function findLLVMLibraries(targetInfo, libPath, libType)
         -- 
         -- This relies on llvm-config being available in the llvm-project package        
         --
-        return findLLVMLibrariesFromConfig()
+        local llvmLibs = findLLVMLibrariesFromConfig()
+        local clangLibs = slangUtil.findLibraries(targetInfo, libPath, "clang*", isClangLibraryName)
+        
+        return slangUtil.concatTables(clangLibs, llvmLibs)    
     else
         return findLLVMLibrariesFromSearch(targetInfo, libPath, libType)
     end
@@ -527,7 +528,7 @@ example "link-check"
     -- We need to vary this depending on type
     local libPath = getLLVMLibraryPath(targetInfo, llvmBuildPath, "Release")
     libdirs { libPath }
-    links { "LLVMSupport" } --, "tinfo"} -- "rt", 
+    links { "LLVMSupport", "LLVMDemangle" } --, "tinfo"} -- "rt", 
 
     -- buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
 
