@@ -94,7 +94,7 @@ function getLLVMLibraryPath(targetInfo, llvmBuildPath, libraryType)
     end
 end
 
-function findLLVMLibraries(targetInfo, libPath, libType)
+function findLLVMLibrariesFromSearch(targetInfo, libPath, libType)
 
     -- We need to vary this depending on libType
         
@@ -102,6 +102,67 @@ function findLLVMLibraries(targetInfo, libPath, libType)
     local llvmLibs = slangUtil.findLibraries(targetInfo, libPath, "LLVM*", isLLVMLibraryName)
     
     return slangUtil.concatTables(clangLibs, llvmLibs)    
+end
+
+function findLLVMLibrariesFromConfig()
+    -- Currently this only works on linux and macosx
+   
+    local llvmConfigPath = "external/llvm/build/bin/llvm-config"
+    os.execute("chmod u+x " .. llvmConfigPath)
+    
+    local libsString = os.outputof(llvmConfigPath .. " --libs")
+    
+    -- We now want to turn into a table. Each library name is prefixed with -l
+    local libsArray = slangUtil.splitString(libsString)
+    
+    local llvmLibs = {}
+    for k, prefixedLib in ipairs(libsArray) do
+        local lib = string.sub(prefixedLib, 3)
+        table.insert(llvmLibs, lib)
+    end
+    
+    -- It seems that the order of clang files *can't* be determined programatically (like with llvm-config)
+    --
+    -- https://stackoverflow.com/questions/28009290/linker-ld-on-os-x-how-to-use-wl-start-group-and-end-group
+    --
+    -- From this we find....
+    -- 1) clang libraries must come first (as they depend on LLVM)
+    -- 2) That the order can be determined from the 'makefile'
+    --
+    -- Looking at clang/tools/driver/CMakeLists.txt
+    -- I can find the Makefile in build/tools/clang/tools/driver
+    -- build/tools/clang/tools/driver/CMakeFiles/clang.dir/link.txt
+    --
+    -- I guess one way to work this out would be via doing cmake on OSX and look at it's makefile
+    
+    -- TODO(JS): This isn't right, because we need the clang dependencies to be ordered correctly
+    
+    -- From this link 
+    -- https://stackoverflow.com/questions/45135/why-does-the-order-in-which-libraries-are-linked-sometimes-cause-errors-in-gcc
+    -- It talks about cyclic links and therefore wanting to specify libraries multiple times
+    -- Note that in the ld man page we have
+    -- "Unlike traditional linkers, ld will continually search a static library while linking. There is no need to specify a static library multiple times on the command line"
+    -- https://www.unix.com/man-page/OSX/1/ld/
+    -- Seems to imply that the order of the static libraries is *not* important?
+     
+    return llvmLibs
+end
+
+function findLLVMLibraries(targetInfo, libPath, libType)
+    if os.host() == "macosx" then
+        -- 
+        -- On OSX it appears --start-group doesn't work, so we use llvm-config
+        -- https://stackoverflow.com/questions/28009290/linker-ld-on-os-x-how-to-use-wl-start-group-and-end-group
+        -- 
+        -- This relies on llvm-config being available in the llvm-project package        
+        --
+        local llvmLibs = findLLVMLibrariesFromConfig()
+        local clangLibs = slangUtil.findLibraries(targetInfo, libPath, "clang*", isClangLibraryName)
+        
+        return slangUtil.concatTables(clangLibs, llvmLibs)    
+    else
+        return findLLVMLibrariesFromSearch(targetInfo, libPath, libType)
+    end
 end
 
 --
@@ -231,7 +292,15 @@ workspace "slang-llvm"
         -- tinfo is for terminal info
         links { "pthread", "tinfo", "stdc++", "dl", "rt", "z" }
         linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
-                         
+                 
+                 
+    filter { "system:macosx" }
+        --buildoptions { "-ffunction-sections", "-fdata-sections" }
+        -- z is for zlib support
+        -- ncurses is for terminal info
+        links { "pthread", "ncurses", "stdc++", "z" } -- , "dl", "rt"}
+        linkoptions{ "-Wl,-rpath,'$$ORIGIN'" }
+                 
 --
 -- We are now going to start defining the projects, where
 -- each project builds some binary artifact (an executable,
@@ -459,7 +528,7 @@ example "link-check"
     -- We need to vary this depending on type
     local libPath = getLLVMLibraryPath(targetInfo, llvmBuildPath, "Release")
     libdirs { libPath }
-    links { "LLVMSupport" } --, "tinfo"} -- "rt", 
+    links { "LLVMSupport", "LLVMDemangle" } --, "tinfo"} -- "rt", 
 
     -- buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
 
