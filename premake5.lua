@@ -121,6 +121,22 @@ function findLLVMLibrariesFromConfig()
         table.insert(llvmLibs, lib)
     end
     
+    -- It seems that the order of clang files *can't* be determined programatically (like with llvm-config)
+    --
+    -- https://stackoverflow.com/questions/28009290/linker-ld-on-os-x-how-to-use-wl-start-group-and-end-group
+    --
+    -- From this we find....
+    -- 1) clang libraries must come first (as they depend on LLVM)
+    -- 2) That the order can be determined from the 'makefile'
+    --
+    -- Looking at clang/tools/driver/CMakeLists.txt
+    -- I can find the Makefile in build/tools/clang/tools/driver
+    -- build/tools/clang/tools/driver/CMakeFiles/clang.dir/link.txt
+    --
+    -- I guess one way to work this out would be via doing cmake on OSX and look at it's makefile
+    
+    -- TODO(JS): This isn't right, because we need the clang dependencies to be ordered correctly
+    
     local clangLibs = slangUtil.findLibraries(targetInfo, libPath, "clang*", isClangLibraryName)
     
     return slangUtil.concatTables(clangLibs, llvmLibs)    
@@ -273,7 +289,7 @@ workspace "slang-llvm"
         --buildoptions { "-ffunction-sections", "-fdata-sections" }
         -- z is for zlib support
         -- ncurses is for terminal info
-        links { "pthread", "ncurses", "stdc++" } -- , "dl", "rt", "z" }
+        links { "pthread", "ncurses", "stdc++", "z" } -- , "dl", "rt"}
         linkoptions{ "-Wl,-rpath,'$$ORIGIN'" }
                  
 --
