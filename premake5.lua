@@ -115,13 +115,15 @@ function findLLVMLibrariesFromConfig()
     -- We now want to turn into a table. Each library name is prefixed with -l
     local libsArray = slangUtil.splitString(libsString)
     
-    local libs = {}
+    local llvmLibs = {}
     for k, prefixedLib in ipairs(libsArray) do
         local lib = string.sub(prefixedLib, 3)
-        table.insert(libs, lib)
+        table.insert(llvmLibs, lib)
     end
     
-    return libs
+    local clangLibs = slangUtil.findLibraries(targetInfo, libPath, "clang*", isClangLibraryName)
+    
+    return slangUtil.concatTables(clangLibs, llvmLibs)    
 end
 
 function findLLVMLibraries(targetInfo, libPath, libType)
