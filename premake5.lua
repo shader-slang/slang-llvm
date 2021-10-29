@@ -185,9 +185,9 @@ llvmPath = deps:getPath("llvm")
 slangPath = deps:getPath("slang")
 
 -- Set up the llvm build path
-llvmBuildPath = llvmPath .. "/build"
+llvmBuildPath = path.join(llvmPath, "build")
 if targetInfo.isWindows then
-    llvmBuildPath = llvmPath .. "/build-" .. slangUtil.getVisualStudioPlatformName(targetInfo.arch)
+    llvmBuildPath = path.join(llvmPath, "build-" .. slangUtil.getVisualStudioPlatformName(targetInfo.arch))
 end
 
 -- This is needed for gcc, for the 'fileno' functions on cygwin
