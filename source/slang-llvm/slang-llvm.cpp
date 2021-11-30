@@ -131,7 +131,7 @@ public:
 
     // DownstreamCompileResult impl
     virtual SlangResult getHostCallableSharedLibrary(ComPtr<ISlangSharedLibrary>& outLibrary) SLANG_OVERRIDE;
-    virtual SlangResult getBinary(ComPtr<ISlangBlob>& outBlob) SLANG_OVERRIDE { return SLANG_E_NOT_IMPLEMENTED;  }
+    virtual SlangResult getBinary(ComPtr<ISlangBlob>& outBlob) SLANG_OVERRIDE { return SLANG_E_NOT_IMPLEMENTED; }
 
     LLVMDownstreamCompileResult(DownstreamDiagnostics& diagnostics,
         std::unique_ptr<llvm::orc::LLJIT> jit) :
@@ -146,7 +146,7 @@ protected:
     std::unique_ptr<llvm::orc::LLJIT> m_jit;
 };
 
-SLANG_NO_THROW void* SLANG_MCALL LLVMDownstreamCompileResult::findSymbolAddressByName(char const* name) 
+SLANG_NO_THROW void* SLANG_MCALL LLVMDownstreamCompileResult::findSymbolAddressByName(char const* name)
 {
     auto fnExpected = m_jit->lookup(name);
     if (fnExpected)
@@ -289,6 +289,24 @@ static void assertFailed(const char* msg)
     printf("Assert failed: %s\n", msg);
     SLANG_BREAKPOINT(0);
 }
+
+#if SLANG_VC && SLANG_PTR_IS_32
+
+// NOTE! These are functions used in 32 bit windows to enable 64 bit maths. This set is probably *not* complete.
+// Check:
+// https://source.winehq.org/source/dlls/ntdll/large_int.c
+
+static int64_t __stdcall _ldiv(int64_t a, int64_t b)
+{
+    return a / b;
+}
+
+static uint64_t __stdcall _ulrem(uint64_t a, uint64_t b)
+{
+    return a % b;
+}
+
+#endif
 
 // These are only the functions that cannot be implemented with 'reasonable performance' in the prelude.
 // It is assumed that calling from JIT to C function whilst not super expensive, is an issue. 
@@ -790,6 +808,14 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
                     {
                         symbolMap.insert(std::make_pair(mangler(func.name), JITEvaluatedSymbol::fromPointer(func.func)));
                     }
+
+#if SLANG_PTR_IS_32 && SLANG_VC
+                    {
+                        // https://docs.microsoft.com/en-us/windows/win32/devnotes/-win32-alldiv
+                        symbolMap.insert(std::make_pair(mangler("_alldiv"), JITEvaluatedSymbol::fromPointer(_ldiv)));
+                        symbolMap.insert(std::make_pair(mangler("_aullrem"), JITEvaluatedSymbol::fromPointer(_ulrem)));
+                    }
+#endif
 
                     if (auto err = stdcLib.define(absoluteSymbols(symbolMap)))
                     {
