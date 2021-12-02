@@ -292,19 +292,34 @@ static void assertFailed(const char* msg)
 
 #if SLANG_VC && SLANG_PTR_IS_32
 
+namespace WinSpecific {
+
 // NOTE! These are functions used in 32 bit windows to enable 64 bit maths. This set is probably *not* complete.
 // Check:
+
 // https://source.winehq.org/source/dlls/ntdll/large_int.c
 
-static int64_t __stdcall _ldiv(int64_t a, int64_t b)
+static int64_t __stdcall _alldiv(int64_t a, int64_t b)
 {
     return a / b;
 }
 
-static uint64_t __stdcall _ulrem(uint64_t a, uint64_t b)
+static int64_t __stdcall _allrem(int64_t a, int64_t b)
 {
     return a % b;
 }
+
+static uint64_t __stdcall _aullrem(uint64_t a, uint64_t b)
+{
+    return a % b;
+}
+
+static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
+{
+    return a / b;
+}
+
+} // WinSpecific
 
 #endif
 
@@ -812,8 +827,10 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 #if SLANG_PTR_IS_32 && SLANG_VC
                     {
                         // https://docs.microsoft.com/en-us/windows/win32/devnotes/-win32-alldiv
-                        symbolMap.insert(std::make_pair(mangler("_alldiv"), JITEvaluatedSymbol::fromPointer(_ldiv)));
-                        symbolMap.insert(std::make_pair(mangler("_aullrem"), JITEvaluatedSymbol::fromPointer(_ulrem)));
+                        symbolMap.insert(std::make_pair(mangler("_alldiv"), JITEvaluatedSymbol::fromPointer(WinSpecific::_alldiv)));
+                        symbolMap.insert(std::make_pair(mangler("_allrem"), JITEvaluatedSymbol::fromPointer(WinSpecific::_allrem)));
+                        symbolMap.insert(std::make_pair(mangler("_aullrem"), JITEvaluatedSymbol::fromPointer(WinSpecific::_aullrem)));
+                        symbolMap.insert(std::make_pair(mangler("_aulldiv"), JITEvaluatedSymbol::fromPointer(WinSpecific::_aulldiv)));
                     }
 #endif
 
