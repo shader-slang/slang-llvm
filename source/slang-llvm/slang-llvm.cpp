@@ -297,6 +297,19 @@ static void assertFailed(const char* msg)
     SLANG_BREAKPOINT(0);
 }
 
+#if SLANG_OSX
+
+namespace OSXSpecific
+{
+
+static void bzero(void* dst, size_t size)
+{
+    ::memset(dst, 0, size);
+}
+
+} // OSXSpecific
+#endif
+
 #if SLANG_VC && SLANG_PTR_IS_32
 
 namespace WinSpecific {
@@ -416,7 +429,9 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
 #   define SLANG_PLATFORM_FUNCS(x) \
     x(memset_pattern4, memset_pattern4, void, (void*, const void*, size_t)) \
     x(memset_pattern8, memset_pattern8, void, (void*, const void*, size_t)) \
-    x(memset_pattern16, memset_pattern16, void, (void*, const void*, size_t))
+    x(memset_pattern16, memset_pattern16, void, (void*, const void*, size_t)) \
+    \
+    x(__bzero, OSXSpecific::bzero, void, (void*, size_t))
 #endif
 
 #ifndef SLANG_PLATFORM_FUNCS
