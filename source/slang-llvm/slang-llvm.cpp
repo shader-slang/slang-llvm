@@ -79,6 +79,13 @@
 #   define SLANG_LLVM_STD
 #endif
 
+#if SLANG_OSX
+// For memset_pattern functions
+// https://www.unix.com/man-page/osx/3/memset_pattern16/
+#   include <string.h>
+#endif
+
+
 namespace slang_llvm {
 
 using namespace clang;
@@ -404,6 +411,17 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
     x(memmove, memmove, void*, (void*, const void*, size_t)) \
     x(memcmp, memcmp, int, (const void*, const void*, size_t)) \
     x(memset, memset, void*, (void*, int, size_t)) 
+
+#if SLANG_OSX
+#   define SLANG_PLATFORM_FUNCS(x) \
+    x(memset_pattern4, memset_pattern4, void, (void*, const void*, size_t)) \
+    x(memset_pattern8, memset_pattern8, void, (void*, const void*, size_t)) \
+    x(memset_pattern16, memset_pattern8, void, (void*, const void*, size_t))     
+#endif
+
+#ifndef SLANG_PLATFORM_FUNCS
+#   define SLANG_PLATFORM_FUNCS(x)
+#endif
 
 static int _getOptimizationLevel(DownstreamCompiler::OptimizationLevel level)
 {
@@ -814,14 +832,17 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
                     //symbolMap.insert(std::make_pair(mangler("sin"), JITEvaluatedSymbol::fromPointer(static_cast<double (*)(double)>(&sin))));
 
-                    static const NameAndFunc funcs[] =
                     {
-                        SLANG_LLVM_FUNCS(SLANG_LLVM_FUNC)
-                    };
+                        static const NameAndFunc funcs[] =
+                        {
+                            SLANG_LLVM_FUNCS(SLANG_LLVM_FUNC)
+                            SLANG_PLATFORM_FUNCS(SLANG_LLVM_FUNC)
+                        };
 
-                    for (auto& func : funcs)
-                    {
-                        symbolMap.insert(std::make_pair(mangler(func.name), JITEvaluatedSymbol::fromPointer(func.func)));
+                        for (auto& func : funcs)
+                        {
+                            symbolMap.insert(std::make_pair(mangler(func.name), JITEvaluatedSymbol::fromPointer(func.func)));
+                        }
                     }
 
 #if SLANG_PTR_IS_32 && SLANG_VC
