@@ -416,7 +416,7 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
 #   define SLANG_PLATFORM_FUNCS(x) \
     x(_memset_pattern4, memset_pattern4, void, (void*, const void*, size_t)) \
     x(_memset_pattern8, memset_pattern8, void, (void*, const void*, size_t)) \
-    x(_memset_pattern16, memset_pattern8, void, (void*, const void*, size_t))     
+    x(_memset_pattern16, memset_pattern16, void, (void*, const void*, size_t))     
 #endif
 
 #ifndef SLANG_PLATFORM_FUNCS
