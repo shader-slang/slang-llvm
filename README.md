@@ -59,20 +59,7 @@ The project currently builds three things
 How to use
 ==========
 
-If the `slang-llvm` shared library/dll is placed in the same directory as the slang binaries, Slang will automatically use LLVM JIT for `host-callable` compilations. This will require a recent version of Slang *and* that it is built with the section in 
-
-```
-/* static */void DownstreamCompilerUtil::updateDefault(DownstreamCompilerSet* set, SlangSourceLanguage sourceLanguage)
-{
-// ...
-#if 0
-// If we have LLVM, lets use that as the default
-#endif
-// ..
-}
-```
-
-The 0 changed to 1.
+If the `slang-llvm` shared library/dll is placed in the same directory as the slang binaries, Slang will automatically use LLVM JIT for `host-callable` compilations. 
 
 Limitiations
 ============
