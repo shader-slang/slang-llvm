@@ -769,8 +769,12 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
     {
         // TODO(JS): Shared library may not be appropriate, but as long as the 'shared library' is never accessed as a blob
         // all is good.
-        case SLANG_SHARED_LIBRARY:
-        case SLANG_HOST_CALLABLE:
+        case SLANG_SHADER_SHARED_LIBRARY:
+
+        // TODO(JS):
+        // Hmm. What does this even mean?
+        // I guess the idea is it's 'SHADER' style, but is runnable on the host. 
+        case SLANG_SHADER_HOST_CALLABLE:
         {
             // Try running something in the module on the JIT
             std::unique_ptr<llvm::orc::LLJIT> jit;
