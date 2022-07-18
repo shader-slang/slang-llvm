@@ -153,6 +153,7 @@ protected:
 
 uint32_t LLVMJITSharedLibrary::release()
 {
+    SLANG_ASSERT(m_refCount != 0);
     const uint32_t count = --m_refCount;
     if (count == 0)
     {
@@ -199,7 +200,6 @@ class LLVMDownstreamCompileResult : public DownstreamCompileResult
 public:
     typedef DownstreamCompileResult Super;
 
-    
     // DownstreamCompileResult impl
     virtual SlangResult getHostCallableSharedLibrary(ComPtr<ISlangSharedLibrary>& outLibrary) SLANG_OVERRIDE;
     virtual SlangResult getBinary(ComPtr<ISlangBlob>& outBlob) SLANG_OVERRIDE { return SLANG_E_NOT_IMPLEMENTED; }
