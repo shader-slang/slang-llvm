@@ -123,37 +123,65 @@ SlangResult LLVMDownstreamCompiler::disassemble(SlangCompileTarget sourceBlobTar
     return SLANG_E_NOT_IMPLEMENTED;
 }
 
-class LLVMDownstreamCompileResult : public ISlangSharedLibrary, public DownstreamCompileResult
+/* !!!!!!!!!!!!!!!!!!!!! LLVMJITSharedLibrary !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
+
+/* This implementation uses atomic ref counting to ensure the shared libraries lifetime can outlive the 
+LLVMDownstreamCompileResult and the compilation that created it */
+class LLVMJITSharedLibrary : public ISlangSharedLibrary
 {
 public:
-    typedef DownstreamCompileResult Super;
-
     // ISlangUnknown
-    SLANG_REF_OBJECT_IUNKNOWN_QUERY_INTERFACE
-    SLANG_REF_OBJECT_IUNKNOWN_ADD_REF
-    SLANG_REF_OBJECT_IUNKNOWN_RELEASE
+    SLANG_NO_THROW uint32_t SLANG_MCALL addRef() SLANG_OVERRIDE { return ++m_refCount; }
+    SLANG_NO_THROW uint32_t SLANG_MCALL release() SLANG_OVERRIDE;
+    SLANG_NO_THROW SlangResult SLANG_MCALL queryInterface(const SlangUUID& uuid, void** outObject);
 
     // ISlangSharedLibrary impl
     virtual SLANG_NO_THROW void* SLANG_MCALL findSymbolAddressByName(char const* name) SLANG_OVERRIDE;
 
-    // DownstreamCompileResult impl
-    virtual SlangResult getHostCallableSharedLibrary(ComPtr<ISlangSharedLibrary>& outLibrary) SLANG_OVERRIDE;
-    virtual SlangResult getBinary(ComPtr<ISlangBlob>& outBlob) SLANG_OVERRIDE { return SLANG_E_NOT_IMPLEMENTED; }
-
-    LLVMDownstreamCompileResult(DownstreamDiagnostics& diagnostics,
-        std::unique_ptr<llvm::orc::LLJIT> jit) :
-        Super(diagnostics),
+    LLVMJITSharedLibrary(std::unique_ptr<llvm::orc::LLJIT> jit) :
+        m_refCount(0),
         m_jit(std::move(jit))
     {
     }
 
 protected:
-    ISlangUnknown* getInterface(const Guid& guid);
+    ISlangUnknown* getInterface(const SlangUUID& uuid);
 
+    std::atomic<uint32_t> m_refCount;
     std::unique_ptr<llvm::orc::LLJIT> m_jit;
 };
 
-SLANG_NO_THROW void* SLANG_MCALL LLVMDownstreamCompileResult::findSymbolAddressByName(char const* name)
+uint32_t LLVMJITSharedLibrary::release()
+{
+    const auto count = --m_refCount;
+    if (count == 0)
+    {
+        delete this;
+    }
+    return count;
+}
+
+SlangResult LLVMJITSharedLibrary::queryInterface(const SlangUUID& uuid, void** outObject)
+{
+    void* intf = getInterface(uuid);
+    if (intf)
+    {
+        ++m_refCount;
+        *outObject = intf;
+        return SLANG_OK;
+    }
+
+    return SLANG_E_NO_INTERFACE;
+}
+
+ISlangUnknown* LLVMJITSharedLibrary::getInterface(const SlangUUID& guid)
+{
+    return (guid == ISlangUnknown::getTypeGuid() || guid == ISlangSharedLibrary::getTypeGuid()) ? 
+        static_cast<ISlangSharedLibrary*>(this) : 
+        nullptr;
+}
+
+void* LLVMJITSharedLibrary::findSymbolAddressByName(char const* name)
 {
     auto fnExpected = m_jit->lookup(name);
     if (fnExpected)
@@ -164,17 +192,34 @@ SLANG_NO_THROW void* SLANG_MCALL LLVMDownstreamCompileResult::findSymbolAddressB
     return nullptr;
 }
 
+/* !!!!!!!!!!!!!!!!!!!!! LLVMDownstreamCompileResult !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
+
+class LLVMDownstreamCompileResult : public DownstreamCompileResult
+{
+public:
+    typedef DownstreamCompileResult Super;
+
+    
+    // DownstreamCompileResult impl
+    virtual SlangResult getHostCallableSharedLibrary(ComPtr<ISlangSharedLibrary>& outLibrary) SLANG_OVERRIDE;
+    virtual SlangResult getBinary(ComPtr<ISlangBlob>& outBlob) SLANG_OVERRIDE { return SLANG_E_NOT_IMPLEMENTED; }
+
+    LLVMDownstreamCompileResult(DownstreamDiagnostics& diagnostics, 
+        ISlangSharedLibrary* sharedLibrary) :
+        Super(diagnostics),
+        m_sharedLibrary(sharedLibrary)
+    {
+    }
+
+protected:
+    ComPtr<ISlangSharedLibrary> m_sharedLibrary;
+};
+
 SlangResult LLVMDownstreamCompileResult::getHostCallableSharedLibrary(ComPtr<ISlangSharedLibrary>& outLibrary)
 {
-    outLibrary = this;
+    outLibrary = m_sharedLibrary;
     return SLANG_OK;
 }
-
-ISlangUnknown* LLVMDownstreamCompileResult::getInterface(const Guid& guid)
-{
-    return guid == ISlangUnknown::getTypeGuid() || guid == ISlangSharedLibrary::getTypeGuid() ? static_cast<ISlangSharedLibrary*>(this) : nullptr;
-}
-
 
 static void _ensureSufficientStack() {}
 
@@ -287,7 +332,7 @@ static double F64_frexp(double x, double* e)
 {
     int ei;
     double m = ::frexp(x, &ei);
-    *e = float(ei);
+    *e = double(ei);
     return m;
 }
 
@@ -896,7 +941,11 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
                 return SLANG_FAIL;
             }
 
-            outResult = new LLVMDownstreamCompileResult(diagsBuffer.m_diagnostics, std::move(jit));
+            // Create the shared library
+            ComPtr<ISlangSharedLibrary> sharedLibrary(new LLVMJITSharedLibrary(std::move(jit)));
+
+            // Create the compile result
+            outResult = new LLVMDownstreamCompileResult(diagsBuffer.m_diagnostics, sharedLibrary);
             return SLANG_OK;
         }
     }
