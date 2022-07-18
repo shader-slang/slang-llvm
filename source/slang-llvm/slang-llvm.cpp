@@ -153,7 +153,7 @@ protected:
 
 uint32_t LLVMJITSharedLibrary::release()
 {
-    const auto count = --m_refCount;
+    const uint32_t count = --m_refCount;
     if (count == 0)
     {
         delete this;
