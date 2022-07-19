@@ -65,6 +65,7 @@
 #include <core/slang-string.h>
 
 #include <core/slang-hash.h>
+#include <core/slang-com-object.h>
 
 #include <compiler-core/slang-downstream-compiler.h>
 
@@ -127,19 +128,16 @@ SlangResult LLVMDownstreamCompiler::disassemble(SlangCompileTarget sourceBlobTar
 
 /* This implementation uses atomic ref counting to ensure the shared libraries lifetime can outlive the 
 LLVMDownstreamCompileResult and the compilation that created it */
-class LLVMJITSharedLibrary : public ISlangSharedLibrary
+class LLVMJITSharedLibrary : public ISlangSharedLibrary, public ComBaseObject
 {
 public:
     // ISlangUnknown
-    SLANG_NO_THROW uint32_t SLANG_MCALL addRef() SLANG_OVERRIDE { return ++m_refCount; }
-    SLANG_NO_THROW uint32_t SLANG_MCALL release() SLANG_OVERRIDE;
-    SLANG_NO_THROW SlangResult SLANG_MCALL queryInterface(const SlangUUID& uuid, void** outObject);
+    SLANG_COM_BASE_IUNKNOWN_ALL
 
     // ISlangSharedLibrary impl
     virtual SLANG_NO_THROW void* SLANG_MCALL findSymbolAddressByName(char const* name) SLANG_OVERRIDE;
 
     LLVMJITSharedLibrary(std::unique_ptr<llvm::orc::LLJIT> jit) :
-        m_refCount(0),
         m_jit(std::move(jit))
     {
     }
@@ -147,33 +145,8 @@ public:
 protected:
     ISlangUnknown* getInterface(const SlangUUID& uuid);
 
-    std::atomic<uint32_t> m_refCount;
     std::unique_ptr<llvm::orc::LLJIT> m_jit;
 };
-
-uint32_t LLVMJITSharedLibrary::release()
-{
-    SLANG_ASSERT(m_refCount != 0);
-    const uint32_t count = --m_refCount;
-    if (count == 0)
-    {
-        delete this;
-    }
-    return count;
-}
-
-SlangResult LLVMJITSharedLibrary::queryInterface(const SlangUUID& uuid, void** outObject)
-{
-    void* intf = getInterface(uuid);
-    if (intf)
-    {
-        ++m_refCount;
-        *outObject = intf;
-        return SLANG_OK;
-    }
-
-    return SLANG_E_NO_INTERFACE;
-}
 
 ISlangUnknown* LLVMJITSharedLibrary::getInterface(const SlangUUID& guid)
 {
