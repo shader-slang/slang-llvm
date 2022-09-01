@@ -66,8 +66,12 @@
 
 #include <core/slang-hash.h>
 #include <core/slang-com-object.h>
+#include <core/slang-string-util.h>
 
 #include <compiler-core/slang-downstream-compiler.h>
+#include <compiler-core/slang-artifact-associated-impl.h>
+#include <compiler-core/slang-artifact-desc-util.h>
+#include <compiler-core/slang-slice-allocator.h>
 
 #include <stdio.h>
 
@@ -97,32 +101,35 @@ using namespace llvm::orc;
 
 using namespace Slang;
 
-class LLVMDownstreamCompiler : public DownstreamCompiler
+class LLVMDownstreamCompiler : public IDownstreamCompiler, ComBaseObject
 {
 public:
-    typedef DownstreamCompiler Super;
+    typedef ComBaseObject Super;
 
-    /// Compile using the specified options. The result is in resOut
-    virtual SlangResult compile(const CompileOptions& options, RefPtr<DownstreamCompileResult>& outResult) SLANG_OVERRIDE;
-    virtual SlangResult disassemble(SlangCompileTarget sourceBlobTarget, const void* blob, size_t blobSize, ISlangBlob** out) SLANG_OVERRIDE;
-    virtual bool isFileBased() SLANG_OVERRIDE { return false; }
+    // IUnknown
+    SLANG_COM_BASE_IUNKNOWN_ALL
 
-    LLVMDownstreamCompiler()
+    // ICastable
+    virtual SLANG_NO_THROW void* SLANG_MCALL castAs(const Guid& guid) SLANG_OVERRIDE;
+
+    // IDownstreamCompiler
+    virtual SLANG_NO_THROW const Desc& SLANG_MCALL getDesc() SLANG_OVERRIDE { return m_desc; }
+    virtual SLANG_NO_THROW SlangResult SLANG_MCALL compile(const CompileOptions& options, IArtifact** outArtifact) SLANG_OVERRIDE;
+    virtual SLANG_NO_THROW bool SLANG_MCALL canConvert(const ArtifactDesc& from, const ArtifactDesc& to) SLANG_OVERRIDE;
+    virtual SLANG_NO_THROW SlangResult SLANG_MCALL convert(IArtifact* from, const ArtifactDesc& to, IArtifact** outArtifact) SLANG_OVERRIDE;
+    virtual SLANG_NO_THROW bool SLANG_MCALL isFileBased() SLANG_OVERRIDE { return false; }
+
+    LLVMDownstreamCompiler():
+        m_desc(SLANG_PASS_THROUGH_LLVM, SemanticVersion(LLVM_VERSION_MAJOR, LLVM_VERSION_MINOR, LLVM_VERSION_PATCH))
     {
-        Desc desc;
-
-        desc.type = SLANG_PASS_THROUGH_LLVM;
-        desc.majorVersion = LLVM_VERSION_MAJOR;
-        desc.minorVersion = LLVM_VERSION_MINOR;
-
-        m_desc = desc;
     }
+
+    void* getInterface(const Guid& guid);
+    void* getObject(const Guid& guid);
+
+    Desc m_desc;
 };
 
-SlangResult LLVMDownstreamCompiler::disassemble(SlangCompileTarget sourceBlobTarget, const void* blob, size_t blobSize, ISlangBlob** out)
-{
-    return SLANG_E_NOT_IMPLEMENTED;
-}
 
 /* !!!!!!!!!!!!!!!!!!!!! LLVMJITSharedLibrary !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
 
@@ -134,6 +141,9 @@ public:
     // ISlangUnknown
     SLANG_COM_BASE_IUNKNOWN_ALL
 
+    /// ICastable
+    virtual SLANG_NO_THROW void* SLANG_MCALL castAs(const Guid& guid);
+
     // ISlangSharedLibrary impl
     virtual SLANG_NO_THROW void* SLANG_MCALL findSymbolAddressByName(char const* name) SLANG_OVERRIDE;
 
@@ -144,15 +154,35 @@ public:
 
 protected:
     ISlangUnknown* getInterface(const SlangUUID& uuid);
+    void* getObject(const SlangUUID& uuid);
 
     std::unique_ptr<llvm::orc::LLJIT> m_jit;
 };
 
 ISlangUnknown* LLVMJITSharedLibrary::getInterface(const SlangUUID& guid)
 {
-    return (guid == ISlangUnknown::getTypeGuid() || guid == ISlangSharedLibrary::getTypeGuid()) ? 
-        static_cast<ISlangSharedLibrary*>(this) : 
-        nullptr;
+    if (guid == ISlangUnknown::getTypeGuid() || 
+        guid == ISlangCastable::getTypeGuid() ||
+        guid == ISlangSharedLibrary::getTypeGuid())
+    {
+        return static_cast<ISlangSharedLibrary*>(this);
+    }
+    return nullptr;
+}
+
+void* LLVMJITSharedLibrary::getObject(const SlangUUID& uuid)
+{
+    SLANG_UNUSED(uuid);
+    return nullptr;
+}
+
+void* LLVMJITSharedLibrary::castAs(const Guid& guid)
+{
+    if (auto ptr = getInterface(guid))
+    {
+        return ptr;
+    }
+    return getObject(guid);
 }
 
 void* LLVMJITSharedLibrary::findSymbolAddressByName(char const* name)
@@ -166,33 +196,6 @@ void* LLVMJITSharedLibrary::findSymbolAddressByName(char const* name)
     return nullptr;
 }
 
-/* !!!!!!!!!!!!!!!!!!!!! LLVMDownstreamCompileResult !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
-
-class LLVMDownstreamCompileResult : public DownstreamCompileResult
-{
-public:
-    typedef DownstreamCompileResult Super;
-
-    // DownstreamCompileResult impl
-    virtual SlangResult getHostCallableSharedLibrary(ComPtr<ISlangSharedLibrary>& outLibrary) SLANG_OVERRIDE;
-    virtual SlangResult getBinary(ComPtr<ISlangBlob>& outBlob) SLANG_OVERRIDE { return SLANG_E_NOT_IMPLEMENTED; }
-
-    LLVMDownstreamCompileResult(DownstreamDiagnostics& diagnostics, 
-        ISlangSharedLibrary* sharedLibrary) :
-        Super(diagnostics),
-        m_sharedLibrary(sharedLibrary)
-    {
-    }
-
-protected:
-    ComPtr<ISlangSharedLibrary> m_sharedLibrary;
-};
-
-SlangResult LLVMDownstreamCompileResult::getHostCallableSharedLibrary(ComPtr<ISlangSharedLibrary>& outLibrary)
-{
-    outLibrary = m_sharedLibrary;
-    return SLANG_OK;
-}
 
 static void _ensureSufficientStack() {}
 
@@ -212,9 +215,9 @@ static void _llvmErrorHandler(void* userData, const std::string& message, bool g
     // Returning nothing, will still cause LLVM to exit the process.
 }
 
-static Slang::DownstreamDiagnostic::Severity _getSeverity(DiagnosticsEngine::Level level)
+static Slang::ArtifactDiagnostic::Severity _getSeverity(DiagnosticsEngine::Level level)
 {
-    typedef DownstreamDiagnostic::Severity Severity;
+    typedef ArtifactDiagnostic::Severity Severity;
     typedef DiagnosticsEngine::Level Level;
     switch (level)
     {
@@ -241,16 +244,20 @@ class BufferedDiagnosticConsumer : public clang::DiagnosticConsumer
 {
 public:
 
+    BufferedDiagnosticConsumer(IArtifactDiagnostics* diagnostics):
+        m_diagnostics(diagnostics)
+    {
+    }
+
     void HandleDiagnostic(DiagnosticsEngine::Level level, const Diagnostic& info) override
     {
-
         SmallString<100> text;
         info.FormatDiagnostic(text);
 
-        DownstreamDiagnostic diagnostic;
+        ArtifactDiagnostic diagnostic;
         diagnostic.severity = _getSeverity(level);
-        diagnostic.stage = DownstreamDiagnostic::Stage::Compile;
-        diagnostic.text = text.c_str();
+        diagnostic.stage = ArtifactDiagnostic::Stage::Compile;
+        diagnostic.text = TerminatedCharSlice(text.c_str(), Count(text.size()));
 
         auto location = info.getLocation();
 
@@ -261,15 +268,15 @@ public:
         const bool useLineDirectives = true;
         const PresumedLoc presumedLoc = sourceManager.getPresumedLoc(location, useLineDirectives);
 
-        diagnostic.fileLine = presumedLoc.getLine();
-        diagnostic.filePath = presumedLoc.getFilename();
+        diagnostic.location.line = presumedLoc.getLine();
+        diagnostic.filePath = TerminatedCharSlice(presumedLoc.getFilename());
 
-        m_diagnostics.diagnostics.add(diagnostic);
+        m_diagnostics->add(diagnostic);
     }
 
-    bool hasError() const { return m_diagnostics.getCountAtLeastSeverity(DownstreamDiagnostic::Severity::Error) > 0; }
+    bool hasError() const { return m_diagnostics->getCountAtLeastSeverity(ArtifactDiagnostic::Severity::Error) > 0; }
 
-    DownstreamDiagnostics m_diagnostics;
+    ComPtr<IArtifactDiagnostics> m_diagnostics;
 };
 
 /*
@@ -456,9 +463,9 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
 #   define SLANG_PLATFORM_FUNCS(x)
 #endif
 
-static int _getOptimizationLevel(DownstreamCompiler::OptimizationLevel level)
+static int _getOptimizationLevel(DownstreamCompileOptions::OptimizationLevel level)
 {
-    typedef DownstreamCompiler::OptimizationLevel OptimizationLevel;
+    typedef DownstreamCompileOptions::OptimizationLevel OptimizationLevel;
     switch (level)
     {
         case OptimizationLevel::None:     return 0;
@@ -496,8 +503,52 @@ static SlangResult _initLLVM()
     return SLANG_OK;
 }
 
-SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPtr<DownstreamCompileResult>& outResult)
+
+bool LLVMDownstreamCompiler::canConvert(const ArtifactDesc& from, const ArtifactDesc& to)
 {
+    return false;
+}
+
+SlangResult LLVMDownstreamCompiler::convert(IArtifact* from, const ArtifactDesc& to, IArtifact** outArtifact)
+{
+    return SLANG_E_NOT_IMPLEMENTED;
+}
+
+void* LLVMDownstreamCompiler::castAs(const Guid& guid)
+{
+    if (auto ptr = getInterface(guid))
+    {
+        return ptr;
+    }
+    return getObject(guid);
+}
+
+void* LLVMDownstreamCompiler::getInterface(const Guid& guid)
+{
+    if (guid == ISlangUnknown::getTypeGuid() ||
+        guid == ICastable::getTypeGuid() ||
+        guid == IDownstreamCompiler::getTypeGuid())
+    {
+        return static_cast<IDownstreamCompiler*>(this);
+    }
+    return nullptr;
+}
+
+void* LLVMDownstreamCompiler::getObject(const Guid& guid)
+{
+    SLANG_UNUSED(guid);
+    return nullptr;
+}
+
+SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, IArtifact** outArtifact)
+{
+    // Currently supports single source file
+    if (options.sourceArtifacts.count != 1)
+    {
+        return SLANG_FAIL;
+    }
+    IArtifact* sourceArtifact = options.sourceArtifacts[0];
+
     _ensureSufficientStack();
 
     static const SlangResult initLLVMResult = _initLLVM();
@@ -513,14 +564,19 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
     IntrusiveRefCntPtr<DiagnosticOptions> diagOpts = new DiagnosticOptions();
 
+    ComPtr<IArtifactDiagnostics> diagnostics(new ArtifactDiagnostics);
+
     // TODO(JS): We might just want this to talk directly to the listener.
     // For now we just buffer up. 
-    BufferedDiagnosticConsumer diagsBuffer;
+    BufferedDiagnosticConsumer diagsBuffer(diagnostics);
 
     IntrusiveRefCntPtr<DiagnosticsEngine> diags = new DiagnosticsEngine(diagID, diagOpts, &diagsBuffer, false);
 
-    const auto& source = options.sourceContents;
-    StringRef sourceStringRef(source.getBuffer(), source.getLength());
+    ComPtr<ISlangBlob> sourceBlob;
+    SLANG_RETURN_ON_FAIL(sourceArtifact->loadBlob(ArtifactKeep::Yes, sourceBlob.writeRef()));
+
+    const auto sourceSlice = StringUtil::getSlice(sourceBlob);
+    StringRef sourceStringRef(sourceSlice.begin(), sourceSlice.getLength());
 
     auto sourceBuffer = llvm::MemoryBuffer::getMemBuffer(sourceStringRef);
 
@@ -597,7 +653,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
         for (const auto& define : options.defines)
         {
-            const Index index = define.nameWithSig.indexOf('(');
+            const Index index = asStringSlice(define.nameWithSig).indexOf('(');
             if (index >= 0)
             {
                 // Interface does not support having a signature.
@@ -606,7 +662,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
             // TODO(JS): NOTE! The options do not support setting a *value* just that a macro is defined.
             // So strictly speaking, we should probably have a warning/error if the value is not appropriate
-            opts.addMacroDef(define.nameWithSig.getBuffer());
+            opts.addMacroDef(define.nameWithSig.begin());
         }
     }
 
@@ -629,12 +685,12 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         std::vector<std::string> includes;
         for (const auto& includePath : options.includePaths)
         {
-            includes.push_back(includePath.getBuffer());
+            includes.push_back(includePath.begin());
         }
 
         clang::CompilerInvocation::setLangDefaults(*opts, inputKind, targetTriple, includes, langStd);
 
-        if (options.floatingPointMode == DownstreamCompiler::FloatingPointMode::Fast)
+        if (options.floatingPointMode == DownstreamCompileOptions::FloatingPointMode::Fast)
         {
             opts->FastMath = true;
         }
@@ -735,13 +791,17 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
         // If the compilation failed make sure, we have an error
         if (!compileSucceeded)
         {
-            diagsBuffer.m_diagnostics.requireErrorDiagnostic();
+            diagnostics->requireErrorDiagnostic();
         }
         
         if (!compileSucceeded || diagsBuffer.hasError())
         {
-            diagsBuffer.m_diagnostics.result = SLANG_FAIL;
-            outResult = new BlobDownstreamCompileResult(diagsBuffer.m_diagnostics, nullptr);
+            diagnostics->setResult(SLANG_FAIL);
+
+            auto artifact = ArtifactUtil::createArtifact(ArtifactDesc::make(ArtifactKind::None, ArtifactPayload::None));
+            artifact->addAssociated(diagnostics);
+
+            *outArtifact = artifact.detach();
             return SLANG_OK;
         }
     }
@@ -827,21 +887,23 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
                     jitErrorStream << err;
 
-                    DownstreamDiagnostic diagnostic;
+                    ArtifactDiagnostic diagnostic;
 
                     StringBuilder buf;
                     buf << "Unable to create JIT engine: " << jitErrorString.c_str();
 
-                    diagnostic.severity = DownstreamDiagnostic::Severity::Error;
-                    diagnostic.stage = DownstreamDiagnostic::Stage::Link;
-                    diagnostic.text = buf.ProduceString();
-                    diagnostic.fileLine = 0;
-
+                    diagnostic.severity = ArtifactDiagnostic::Severity::Error;
+                    diagnostic.stage = ArtifactDiagnostic::Stage::Link;
+                    diagnostic.text = TerminatedCharSlice(buf.getBuffer(), buf.getLength());
+                    
                     // Add the error
-                    diagsBuffer.m_diagnostics.diagnostics.add(diagnostic);
-                    diagsBuffer.m_diagnostics.result = SLANG_FAIL;
+                    diagnostics->add(diagnostic);
+                    diagnostics->setResult(SLANG_FAIL);
 
-                    outResult = new BlobDownstreamCompileResult(diagsBuffer.m_diagnostics, nullptr);
+                    auto artifact = ArtifactUtil::createArtifact(ArtifactDesc::make(ArtifactKind::None, ArtifactPayload::None));
+                    artifact->addAssociated(diagnostics);
+
+                    *outArtifact = artifact.detach();
                     return SLANG_OK;
                 }
                 jit = std::move(*expectJit);
@@ -917,8 +979,14 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
             // Create the shared library
             ComPtr<ISlangSharedLibrary> sharedLibrary(new LLVMJITSharedLibrary(std::move(jit)));
 
-            // Create the compile result
-            outResult = new LLVMDownstreamCompileResult(diagsBuffer.m_diagnostics, sharedLibrary);
+            // Work out the ArtifactDesc 
+            const auto targetDesc = ArtifactDescUtil::makeDescForCompileTarget(options.targetType);
+
+            auto artifact = ArtifactUtil::createArtifact(targetDesc);
+            artifact->addAssociated(diagnostics);
+            artifact->addRepresentation(sharedLibrary);
+
+            *outArtifact = artifact.detach();
             return SLANG_OK;
         }
     }
@@ -928,9 +996,16 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
 } // namespace slang_llvm
 
-extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler(Slang::RefPtr<Slang::DownstreamCompiler>&out)
+extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V2(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out)
 {
-    Slang::RefPtr<slang_llvm::LLVMDownstreamCompiler> compiler(new slang_llvm::LLVMDownstreamCompiler);
-    out = compiler;
-    return SLANG_OK;
+    Slang::ComPtr<slang_llvm::LLVMDownstreamCompiler> compiler(new slang_llvm::LLVMDownstreamCompiler);
+
+    if (auto ptr = compiler->castAs(intfGuid))
+    {
+        compiler.detach();
+        *out = (Slang::IDownstreamCompiler*)ptr;
+        return SLANG_OK;
+    }
+
+    return SLANG_E_NO_INTERFACE;
 }
