@@ -289,7 +289,7 @@ workspace "slang-llvm"
     filter { "system:linux" }
         buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
         -- z is for zlib support
-        -- tinfo is for terminal info
+        -- Note that tinfo is not currently required (as is disabled for linux in llvm-project)
         links { "pthread", "stdc++", "dl", "rt", "z" }
         linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
                  
@@ -528,7 +528,7 @@ example "link-check"
     -- We need to vary this depending on type
     local libPath = getLLVMLibraryPath(targetInfo, llvmBuildPath, "Release")
     libdirs { libPath }
-    links { "LLVMSupport", "LLVMDemangle" } --, "tinfo"} -- "rt", 
+    links { "LLVMSupport", "LLVMDemangle" } 
 
     -- buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
 
