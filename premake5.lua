@@ -257,9 +257,6 @@ workspace "slang-llvm"
     filter { "platforms:aarch64"}
         architecture "ARM"
 
-    filter { "platforms:x86", "system:windows" }
-        toolset "clang"
-
     filter { "toolset:clang or gcc*" }  
         buildoptions { "-fvisibility=hidden" } 
         -- Warnings
