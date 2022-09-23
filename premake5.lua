@@ -260,7 +260,7 @@ workspace "slang-llvm"
     filter { "toolset:clang or gcc*" }  
         buildoptions { "-fvisibility=hidden" } 
         -- Warnings
-        buildoptions { "-Wno-unused-parameter", "-Wno-type-limits", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-reorder", "-Wno-switch", "-Wno-return-type", "-Wno-unused-local-typedefs", "-Wno-parentheses", "-Wno-ignored-optimization-argument", "-Wno-unknown-warning-option", "-Wno-class-memaccess", "-Wno-error", "-Wno-error=comment"} 
+        buildoptions { "-Wno-unused-parameter", "-Wno-type-limits", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-reorder", "-Wno-switch", "-Wno-return-type", "-Wno-unused-local-typedefs", "-Wno-parentheses", "-Wno-ignored-optimization-argument", "-Wno-unknown-warning-option", "-Wno-class-memaccess", "-Wno-error", "-Wno-error=comment", "-Wno-redundant-move", "-Wno-comment"} 
         
     filter { "toolset:gcc*"}
         buildoptions { "-Wno-unused-but-set-variable", "-Wno-implicit-fallthrough"  }
@@ -290,7 +290,7 @@ workspace "slang-llvm"
         buildoptions { "-fno-semantic-interposition", "-ffunction-sections", "-fdata-sections" }
         -- z is for zlib support
         -- tinfo is for terminal info
-        links { "pthread", "tinfo", "stdc++", "dl", "rt", "z" }
+        links { "pthread", "stdc++", "dl", "rt", "z" }
         linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
                  
                  
