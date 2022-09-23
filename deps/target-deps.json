@@ -4,13 +4,13 @@
         "dependencies" : [
             {
                 "name" : "llvm",
-                "baseUrl" : "https://github.com/shader-slang/llvm-project/releases/download/slang-tot-23/",
+                "baseUrl" : "https://github.com/shader-slang/llvm-project/releases/download/slang-tot-24/",
                 "packages" : 
                 {
-                    "windows-x86_64" : "llvm-tot-23-win64-Release.zip",
-                    "windows-x86" : "llvm-tot-23-win32-Release.zip",
-                    "linux-x86_64" : "llvm-tot-23-linux-x86_64-Release.zip",
-                    "macosx-x86_64" : "llvm-tot-23-macosx-x86_64-Release.zip"
+                    "windows-x86_64" : "llvm-tot-24-win64-Release.zip",
+                    "windows-x86" : "llvm-tot-24-win32-Release.zip",
+                    "linux-x86_64" : "llvm-tot-24-linux-x86_64-Release.zip",
+                    "macosx-x86_64" : "llvm-tot-24-macosx-x86_64-Release.zip"
                 }
             },
             {
