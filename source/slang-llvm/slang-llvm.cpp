@@ -529,7 +529,7 @@ SlangResult LLVMDownstreamCompiler::getVersionString(slang::IBlob** outVersionSt
 
     {
         // If we don't have the commitHash, we use the library timestamp, to uniquely identify.
-        versionString << " " << SharedLibraryUtils::getSharedLibraryTimestamp(createLLVMDownstreamCompiler_V2);
+        versionString << " " << SharedLibraryUtils::getSharedLibraryTimestamp((void*)createLLVMDownstreamCompiler_V2);
     }
 
     *outVersionString = StringBlob::moveCreate(versionString).detach();
