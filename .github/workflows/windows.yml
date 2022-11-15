@@ -16,7 +16,7 @@ jobs:
         # We can't build aarch64 LLVM for windows currently, so don't have 'aarch64' 
         platform: ['x64', 'Win32'] 
     steps:
-      - uses: actions/checkout@v2.3.4
+      - uses: actions/checkout@v2
         with:
           submodules: 'true'
           fetch-depth: '0'
