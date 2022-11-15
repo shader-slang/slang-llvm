@@ -67,6 +67,7 @@
 #include <core/slang-hash.h>
 #include <core/slang-com-object.h>
 #include <core/slang-string-util.h>
+#include <core/slang-shared-library.h>
 
 #include <compiler-core/slang-downstream-compiler.h>
 #include <compiler-core/slang-artifact-associated-impl.h>
@@ -90,6 +91,8 @@
 #   include <string.h>
 #endif
 
+// Predeclare. We'll use this symbol to lookup timestamp, if we don't have a hash.
+extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V2(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out);
 
 namespace slang_llvm {
 
@@ -118,6 +121,7 @@ public:
     virtual SLANG_NO_THROW bool SLANG_MCALL canConvert(const ArtifactDesc& from, const ArtifactDesc& to) SLANG_OVERRIDE;
     virtual SLANG_NO_THROW SlangResult SLANG_MCALL convert(IArtifact* from, const ArtifactDesc& to, IArtifact** outArtifact) SLANG_OVERRIDE;
     virtual SLANG_NO_THROW bool SLANG_MCALL isFileBased() SLANG_OVERRIDE { return false; }
+    virtual SLANG_NO_THROW SlangResult SLANG_MCALL getVersionString(slang::IBlob** outVersionString) SLANG_OVERRIDE;
 
     LLVMDownstreamCompiler():
         m_desc(SLANG_PASS_THROUGH_LLVM, SemanticVersion(LLVM_VERSION_MAJOR, LLVM_VERSION_MINOR, LLVM_VERSION_PATCH))
@@ -512,6 +516,24 @@ bool LLVMDownstreamCompiler::canConvert(const ArtifactDesc& from, const Artifact
 SlangResult LLVMDownstreamCompiler::convert(IArtifact* from, const ArtifactDesc& to, IArtifact** outArtifact)
 {
     return SLANG_E_NOT_IMPLEMENTED;
+}
+
+SlangResult LLVMDownstreamCompiler::getVersionString(slang::IBlob** outVersionString)
+{
+    StringBuilder versionString;
+    // Append the version
+    m_desc.version.append(versionString);
+
+    // Really we should have a hash to identify the specific version.
+    // For now we'll fall back to just using the timestamp
+
+    {
+        // If we don't have the commitHash, we use the library timestamp, to uniquely identify.
+        versionString << " " << SharedLibraryUtils::getSharedLibraryTimestamp((void*)createLLVMDownstreamCompiler_V2);
+    }
+
+    *outVersionString = StringBlob::moveCreate(versionString).detach();
+    return SLANG_OK;
 }
 
 void* LLVMDownstreamCompiler::castAs(const Guid& guid)
