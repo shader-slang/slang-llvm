@@ -38,6 +38,6 @@ jobs:
         with:
           name: slang-llvm-linux-${{matrix.platform}}-${{matrix.configuration}}
           path: | 
-            bin/
+            bin/**/*.so
             LICENSE
             README.md    

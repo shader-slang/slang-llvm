@@ -33,7 +33,7 @@ jobs:
         with:
           name: slang-llvm-windows-${{matrix.platform}}-${{matrix.configuration}}
           path: | 
-            bin/
+            bin/**/*.dll
             LICENSE
             README.md    
 

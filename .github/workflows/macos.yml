@@ -38,7 +38,7 @@ jobs:
         with:
           name: slang-llvm-macos-${{matrix.platform}}-${{matrix.configuration}}
           path: | 
-            bin/
+            bin/**/*.dylib
             LICENSE
             README.md
             
