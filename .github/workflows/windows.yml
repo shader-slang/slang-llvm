@@ -29,3 +29,32 @@ jobs:
         run:
           MSBuild.exe slang-llvm.sln -v:m -m -property:Configuration=${{matrix.configuration}} -property:Platform=${{matrix.platform}} -property:WindowsTargetPlatformVersion=10.0.19041.0
           
+      - name: archive
+        id: archive
+        run: |
+          echo "achiving files..."
+          if ("${{matrix.platform}}" -eq "x64")
+          {
+            $slangDeployPlatform = "win64"
+          }
+          else
+          {
+            $slangDeployPlatform = "win32"
+          }
+          $tagName = & git show -s --format="%h"
+          $slangVersion = $tagName
+          $binArchive = "slang-llvm-$slangVersion-$slangDeployPlatform.zip"
+
+          echo "name=BINARY_ARCHIVE::$binArchive"
+          echo "::set-output name=BINARY_ARCHIVE::$binArchive"
+
+          7z a "$binArchive" README.md
+          7z a "$binArchive" LICENSE
+          7z a "$binArchive" bin\*\*\*.dll
+          
+      - uses: actions/upload-artifact@v3
+        with:
+          name: slang-llvm-${{matrix.configuration}}-${{matrix.platform}}-${{matrix.compiler}}
+          path: ${{ steps.archive.outputs.BINARY_ARCHIVE }}     
+
+      
