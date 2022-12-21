@@ -16,6 +16,7 @@ jobs:
       matrix:
         # Might want debug once release works
         configuration: ['release'] # , 'debug']
+        platform: ['x64']
         
     steps:   
       - uses: actions/checkout@v3
@@ -33,30 +34,11 @@ jobs:
         run: |
           make config=${{matrix.configuration}}_x64 -j`sysctl -n hw.ncpu`
           
-          
-      - name: archive
-        id: archive
-        run: |
-          echo "achiving files..."
-          
-          ARCH_NAME=`uname -p`
-          PLATFORM_NAME="macosx-x86_64"
-          TAG_NAME=`git show -s --format="%h"`
-          SLANG_LLVM_VERSION=${TAG_NAME}
-          
-          echo "tag:$TAG_NAME"
-          echo "slang-llvm-version:$LLVM_VERSION"
-          
-          BIN_ARCHIVE="slang-llvm-$TAG_NAME-$PLATFORM_NAME-${{matrix.configuration}}.zip"
-
-          zip "$BIN_ARCHIVE" README.md
-          zip "$BIN_ARCHIVE" LICENSE
-          zip "$BIN_ARCHIVE" -r bin/*/*/*.dylib
-          
-          echo "name=BINARY_ARCHIVE::$BIN_ARCHIVE"
-          echo "::set-output name=BINARY_ARCHIVE::$BIN_ARCHIVE"
-
       - uses: actions/upload-artifact@v3
         with:
-          name: slang-llvm-${{matrix.configuration}}-${{matrix.platform}}-${{matrix.compiler}}
-          path: ${{ steps.archive.outputs.BINARY_ARCHIVE }} 
+          name: slang-llvm-macos-${{matrix.platform}}-${{matrix.configuration}}
+          path: | 
+            bin/
+            LICENSE
+            README.md
+            
