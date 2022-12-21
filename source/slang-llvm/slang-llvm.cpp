@@ -928,6 +928,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, RefPt
 
 } // namespace slang_llvm
 
+// Make sure!
 extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler(Slang::RefPtr<Slang::DownstreamCompiler>&out)
 {
     Slang::RefPtr<slang_llvm::LLVMDownstreamCompiler> compiler(new slang_llvm::LLVMDownstreamCompiler);
