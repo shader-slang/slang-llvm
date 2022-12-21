@@ -24,15 +24,13 @@ Once this repo has been cloned, it is neccessary to get the dependencies needed 
 
 ## Requirements
 
-On Ubuntu 18.04 zlib may need to be installed...
+Ubuntu zlib may need to be installed...
 
 ```
 sudo apt-get install zlib1g-dev
 ```
 
 If zlib isn't available `-lz` on the link command line will fail.
-
-zlib appears to be installed by default on Ubuntu 20.04
 
 ## Premake
 
@@ -44,7 +42,7 @@ Slang-llvm uses the tool [`premake5`](https://premake.github.io/) in order to ge
 premake vs2019 --deps=true
 ```
 
-By default this assumes building for `x86_64`. If some other target is required it can be set via the `--arch` option. NOTE! This might seem unrequired by Visual Studio as it is possible to vary the 'platform' - the arch must be set to the desired platform, as any binaries (such as LLVM!) will only be available for the value specified in `--arch`. For example to build for x86
+By default this assumes building for `x86_64`. If some other target is required it can be set via the `--arch` option. NOTE! This might seem unrequired by Visual Studio as it is possible to vary the 'platform' in the IDE. In this case though arch must be set to the desired platform, as any binaries (such as LLVM!) will only be available for the value specified in `--arch`. For example to build for x86
 
 ```
 premake vs2019 --deps=true --arch=x86
