@@ -24,9 +24,9 @@ jobs:
           submodules: 'true'
           fetch-depth: '0'
 
-      - name: prepare
-        run: |
-          sudo apt-get install docker.io
+      #- name: prepare
+      #  run: |
+      #    sudo apt-get install docker.io
           
       - name: build
         run: |
