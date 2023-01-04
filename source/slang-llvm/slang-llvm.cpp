@@ -364,6 +364,14 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
 // These are only the functions that cannot be implemented with 'reasonable performance' in the prelude.
 // It is assumed that calling from JIT to C function whilst not super expensive, is an issue. 
 
+// Previously used, but doesn't work with holy build box, so just define directly.
+
+//    x(F32_isnan, SLANG_LLVM_STD isnan, bool, (float)) 
+//    x(F64_isnan, SLANG_LLVM_STD isnan, bool, (double)) 
+
+bool F64_isnan(double v) { return v != v; }
+bool F32_isnan(float v) { return v != v; }
+
 // name, cppName, retType, paramTypes
 #define SLANG_LLVM_FUNCS(x) \
     x(F64_ceil, ceil, double, (double)) \
@@ -388,7 +396,7 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
     x(F64_trunc, trunc, double, (double)) \
     x(F64_sqrt, sqrt, double, (double)) \
     \
-    x(F64_isnan, SLANG_LLVM_STD isnan, bool, (double)) \
+    x(F64_isnan, F64_isnan, bool, (double)) \
     x(F64_isfinite, SLANG_LLVM_STD isfinite, bool, (double)) \
     x(F64_isinf, SLANG_LLVM_STD isinf, bool, (double)) \
     \
@@ -423,7 +431,7 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
     x(F32_trunc, truncf, float, (float)) \
     x(F32_sqrt, sqrtf, float, (float)) \
     \
-    x(F32_isnan, SLANG_LLVM_STD isnan, bool, (float)) \
+    x(F32_isnan, F32_isnan, bool, (float)) \
     x(F32_isfinite, SLANG_LLVM_STD isfinite, bool, (float)) \
     x(F32_isinf, SLANG_LLVM_STD isinf, bool, (float)) \
     \
