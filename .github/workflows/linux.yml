@@ -29,7 +29,8 @@ jobs:
           sudo apt-get install docker.io
           
       - name: build
-        sudo docker run -t -i --rm -w /io -v `pwd`:/io ghcr.io/phusion/holy-build-box/hbb-64 /hbb_exe/activate-exec  bash /io/build-hbb-linux.sh ${{matrix.platform}} ${{matrix.configuration}}
+        run: |
+          sudo docker run -t -i --rm -w /io -v `pwd`:/io ghcr.io/phusion/holy-build-box/hbb-64 /hbb_exe/activate-exec bash /io/build-hbb-linux.sh ${{matrix.platform}} ${{matrix.configuration}}
           
       #- name: premake
       #  run: |
