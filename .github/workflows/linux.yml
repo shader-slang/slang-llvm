@@ -30,8 +30,7 @@ jobs:
           
       - name: build
         run: |
-          sudo docker run -t --rm -w /io -v `pwd`:/io ghcr.io/phusion/holy-build-box/hbb-64 /hbb_exe/activate-exec bash /io/build-hbb-linux.sh ${{matrix.platform}} ${{matrix.configuration}}
-          # sudo docker run -t -i --rm -w /io -v `pwd`:/io ghcr.io/phusion/holy-build-box/hbb-64 /hbb_exe/activate-exec bash /io/build-hbb-linux.sh ${{matrix.platform}} ${{matrix.configuration}}
+          sudo docker run -t --rm -w /io -v `pwd`:/io phusion/holy-build-box-64:latest /hbb_exe/activate-exec bash /io/build-hbb-linux.sh ${{matrix.platform}} ${{matrix.configuration}}
           
       #- name: premake
       #  run: |
