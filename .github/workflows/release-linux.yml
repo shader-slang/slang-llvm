@@ -11,7 +11,7 @@ jobs:
     name: Upload Asset - Linux
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
     # runs-on: ubuntu-latest
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-18.04
     
     strategy:
       matrix:
