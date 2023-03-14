@@ -98,9 +98,10 @@ It's not clear if this function is needed for ARM WIN targets, but we'll assume 
 
 https://learn.microsoft.com/en-us/windows/win32/devnotes/-win32-chkstk
 https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/100775 
+https://codywu2010.wordpress.com/2010/10/04/__chkstk-and-stack-overflow/
 */
 
-extern "C" void __chkstk();
+extern "C" void /* __declspec(naked)*/ __cdecl _chkstk();
 #endif
 
 // Predeclare. We'll use this symbol to lookup timestamp, if we don't have a hash.
@@ -477,7 +478,7 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
 
 #if SLANG_WINDOWS_FAMILY
 #   define SLANG_PLATFORM_FUNCS(x) \
-    x(_chkstk, __chkstk, void, ()) 
+    x(_chkstk, _chkstk, void, ()) 
 #endif
 
 #ifndef SLANG_PLATFORM_FUNCS
