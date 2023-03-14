@@ -101,7 +101,11 @@ https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/100775
 https://codywu2010.wordpress.com/2010/10/04/__chkstk-and-stack-overflow/
 */
 
+#   if SLANG_PROCESSOR_X86
+extern "C" void /* __declspec(naked)*/ __cdecl _chkstk();
+#   else
 extern "C" void /* __declspec(naked)*/ __cdecl __chkstk();
+#   endif
 #endif
 
 // Predeclare. We'll use this symbol to lookup timestamp, if we don't have a hash.
@@ -476,9 +480,14 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
     x(__bzero, OSXSpecific::bzero, void, (void*, size_t))
 #endif
 
-#if SLANG_WINDOWS_FAMILY
-#   define SLANG_PLATFORM_FUNCS(x) \
-    x(_chkstk, __chkstk, void, ()) 
+#if SLANG_WINDOWS_FAMILY 
+#   if SLANG_PROCESSOR_X86
+#       define SLANG_PLATFORM_FUNCS(x) \
+            x(_chkstk, _chkstk, void, ()) 
+#   else
+#       define SLANG_PLATFORM_FUNCS(x) \
+            x(_chkstk, __chkstk, void, ()) 
+#   endif
 #endif
 
 #ifndef SLANG_PLATFORM_FUNCS
