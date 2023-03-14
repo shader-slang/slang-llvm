@@ -91,8 +91,20 @@
 #   include <string.h>
 #endif
 
+#if SLANG_WINDOWS_FAMILY
+
+/*
+It's not clear if this function is needed for ARM WIN targets, but we'll assume it does for now.
+
+https://learn.microsoft.com/en-us/windows/win32/devnotes/-win32-chkstk
+https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/100775 
+*/
+
+extern "C" void __chkstk();
+#endif
+
 // Predeclare. We'll use this symbol to lookup timestamp, if we don't have a hash.
-extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V2(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out);
+extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V3(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out);
 
 namespace slang_llvm {
 
@@ -463,6 +475,11 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
     x(__bzero, OSXSpecific::bzero, void, (void*, size_t))
 #endif
 
+#if SLANG_WINDOWS_FAMILY
+#   define SLANG_PLATFORM_FUNCS(x) \
+    x(_chkstk, __chkstk, void, ()) 
+#endif
+
 #ifndef SLANG_PLATFORM_FUNCS
 #   define SLANG_PLATFORM_FUNCS(x)
 #endif
@@ -529,7 +546,7 @@ SlangResult LLVMDownstreamCompiler::getVersionString(slang::IBlob** outVersionSt
 
     {
         // If we don't have the commitHash, we use the library timestamp, to uniquely identify.
-        versionString << " " << SharedLibraryUtils::getSharedLibraryTimestamp((void*)createLLVMDownstreamCompiler_V2);
+        versionString << " " << SharedLibraryUtils::getSharedLibraryTimestamp((void*)createLLVMDownstreamCompiler_V3);
     }
 
     *outVersionString = StringBlob::moveCreate(versionString).detach();
@@ -562,8 +579,16 @@ void* LLVMDownstreamCompiler::getObject(const Guid& guid)
     return nullptr;
 }
 
-SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, IArtifact** outArtifact)
+SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& inOptions, IArtifact** outArtifact)
 {
+    if (!isVersionCompatible(inOptions))
+    {
+        // Not possible to compile with this version of the interface.
+        return SLANG_E_NOT_IMPLEMENTED;
+    }
+
+    CompileOptions options = getCompatibleVersion(&inOptions);
+
     // Currently supports single source file
     if (options.sourceArtifacts.count != 1)
     {
@@ -1018,7 +1043,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, IArti
 
 } // namespace slang_llvm
 
-extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V2(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out)
+extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V3(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out)
 {
     Slang::ComPtr<slang_llvm::LLVMDownstreamCompiler> compiler(new slang_llvm::LLVMDownstreamCompiler);
 
