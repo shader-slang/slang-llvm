@@ -217,6 +217,8 @@ workspace "slang-llvm"
         platforms {"aarch64" }
     end
     
+    flags "MultiProcessorCompile"
+    
     -- 
     -- Make slang-test the startup project.
     --
