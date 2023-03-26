@@ -92,7 +92,7 @@
 #endif
 
 // Predeclare. We'll use this symbol to lookup timestamp, if we don't have a hash.
-extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V2(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out);
+extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V3(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out);
 
 namespace slang_llvm {
 
@@ -529,7 +529,7 @@ SlangResult LLVMDownstreamCompiler::getVersionString(slang::IBlob** outVersionSt
 
     {
         // If we don't have the commitHash, we use the library timestamp, to uniquely identify.
-        versionString << " " << SharedLibraryUtils::getSharedLibraryTimestamp((void*)createLLVMDownstreamCompiler_V2);
+        versionString << " " << SharedLibraryUtils::getSharedLibraryTimestamp((void*)createLLVMDownstreamCompiler_V3);
     }
 
     *outVersionString = StringBlob::moveCreate(versionString).detach();
@@ -1018,7 +1018,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& options, IArti
 
 } // namespace slang_llvm
 
-extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V2(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out)
+extern "C" SLANG_DLL_EXPORT SlangResult createLLVMDownstreamCompiler_V3(const SlangUUID& intfGuid, Slang::IDownstreamCompiler** out)
 {
     Slang::ComPtr<slang_llvm::LLVMDownstreamCompiler> compiler(new slang_llvm::LLVMDownstreamCompiler);
 
