@@ -486,7 +486,7 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
             x(_chkstk, _chkstk, void, ()) 
 #   else
 #       define SLANG_PLATFORM_FUNCS(x) \
-            x(_chkstk, __chkstk, void, ()) 
+            x(__chkstk, __chkstk, void, ()) 
 #   endif
 #endif
 
