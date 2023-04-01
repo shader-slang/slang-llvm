@@ -229,8 +229,7 @@ workspace "slang-llvm"
     -- and configuration options, e.g. `bin/windows-x64/debug/`
     targetdir("bin/" .. targetInfo.tokenName .. "/%{cfg.buildcfg:lower()}")
 
-    -- C++14 
-    cppdialect "C++14"
+    cppdialect "C++17"
     
     -- Exceptions have to be turned off for linking against LLVM
     exceptionhandling("Off")
