@@ -163,7 +163,7 @@ public:
     SLANG_COM_BASE_IUNKNOWN_ALL
 
     /// ICastable
-    virtual SLANG_NO_THROW void* SLANG_MCALL castAs(const Guid& guid);
+    virtual SLANG_NO_THROW void* SLANG_MCALL castAs(const Guid& guid) SLANG_OVERRIDE;
 
     // ISlangSharedLibrary impl
     virtual SLANG_NO_THROW void* SLANG_MCALL findSymbolAddressByName(char const* name) SLANG_OVERRIDE;
