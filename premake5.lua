@@ -292,7 +292,9 @@ workspace "slang-llvm"
         -- z is for zlib support
         -- Note that tinfo is not currently required (as is disabled for linux in llvm-project)
         links { "pthread", "stdc++", "dl", "rt", "z" }
-        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined,--start-group" }
+        linkoptions{  "-Wl,-rpath,'$$ORIGIN',--no-as-needed,--no-undefined" }
+        -- Allow libraries to be listed in any order (adds opening and closing --start-group --end-group)
+        linkgroups "On"
                  
                  
     filter { "system:macosx" }
