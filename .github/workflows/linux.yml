@@ -4,20 +4,20 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [ master ]    
-    
+    branches: [ master ]
+
 jobs:
   build:
     name: Linux Build CI
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-    runs-on: ubuntu-18.04
-    
+    runs-on: ubuntu-20.04
+
     strategy:
       matrix:
         # Might want debug once release works
         configuration: ['release'] # , 'debug']
-        
-    steps:   
+
+    steps:
       - uses: actions/checkout@v3
         with:
           submodules: 'true'
@@ -27,7 +27,7 @@ jobs:
         run: |
           PREMAKE=external/slang-binaries/premake/premake-5.0.0-alpha16/bin/linux-64/premake5
           chmod u+x ${PREMAKE}
-          ${PREMAKE} gmake --deps=true --no-progress=true          
+          ${PREMAKE} gmake --deps=true --no-progress=true
 
       - name: Build
         run: |
