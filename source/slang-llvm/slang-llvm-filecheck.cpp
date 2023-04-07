@@ -33,7 +33,7 @@ public:
         const char* programName,
         const char* rulesFilePath,
         const char* fileCheckPrefix,
-        const CharSlice* stringToCheck,
+        const char* stringToCheck,
         const char* stringToCheckName,
         ReportDiagnostic testReporter,
         void* reporterData,
@@ -76,7 +76,7 @@ TestResult LLVMFileCheck::performTest(
     const char* const programName,
     const char* const rulesFilePath,
     const char* const fileCheckPrefix,
-    const CharSlice* const stringToCheck,
+    const char* const stringToCheck,
     const char* const stringToCheckName,
     const ReportDiagnostic testReporter,
     void* const userReporterData,
@@ -108,7 +108,7 @@ TestResult LLVMFileCheck::performTest(
 
     SmallString<4096> inputBuffer;
     const auto inputStringMB = MemoryBuffer::getMemBuffer(
-        StringRef(stringToCheck->data, stringToCheck->count),
+        StringRef(stringToCheck),
         stringToCheckName,
         false);
     const StringRef inputStringRef = fc.CanonicalizeFile(*inputStringMB.get(), inputBuffer);
