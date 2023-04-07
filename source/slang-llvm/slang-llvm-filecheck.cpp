@@ -161,7 +161,7 @@ void* LLVMFileCheck::getInterface(const Guid& guid)
         guid == ICastable::getTypeGuid() ||
         guid == IFileCheck::getTypeGuid())
     {
-        return static_cast<IFileCheck*>(this);
+        return this;
     }
     return nullptr;
 }
@@ -174,14 +174,14 @@ void* LLVMFileCheck::getObject(const Guid& guid)
 
 } // namespace slang_llvm
 
-extern "C" SLANG_DLL_EXPORT SlangResult createLLVMFileCheck_V1(const SlangUUID& intfGuid, Slang::IFileCheck** out)
+extern "C" SLANG_DLL_EXPORT SlangResult createLLVMFileCheck_V1(const SlangUUID& intfGuid, void** out)
 {
     Slang::ComPtr<slang_llvm::LLVMFileCheck> fileCheck(new slang_llvm::LLVMFileCheck);
 
     if (auto ptr = fileCheck->castAs(intfGuid))
     {
         fileCheck.detach();
-        *out = (Slang::IFileCheck*)ptr;
+        *out = ptr;
         return SLANG_OK;
     }
 
