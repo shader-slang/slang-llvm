@@ -51,7 +51,7 @@ private:
         TestMessageType testMessageType;
     };
 
-    static void fileCheckDiagHandler(const SMDiagnostic & diag, void *reporterData);
+    static void fileCheckDiagHandler(const SMDiagnostic& diag, void* reporterData);
 };
 
 class DisplayedStringOStream : public raw_string_ostream
@@ -61,7 +61,7 @@ public:
     virtual bool is_displayed() const override { return true; };
 };
 
-void LLVMFileCheck::fileCheckDiagHandler(const SMDiagnostic & diag, void *dataPtr)
+void LLVMFileCheck::fileCheckDiagHandler(const SMDiagnostic& diag, void* dataPtr)
 {
     const ReporterData& reporterData = *reinterpret_cast<ReporterData*>(dataPtr);
     std::string s;
@@ -69,7 +69,6 @@ void LLVMFileCheck::fileCheckDiagHandler(const SMDiagnostic & diag, void *dataPt
     o.enable_colors(reporterData.colorDiagnosticOutput);
     diag.print(reporterData.programName, o);
     reporterData.reportFun(reporterData.data, TestMessageType::TestFailure, s.c_str());
-
 }
 
 TestResult LLVMFileCheck::performTest(
