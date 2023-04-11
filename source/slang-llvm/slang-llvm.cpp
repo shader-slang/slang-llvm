@@ -623,6 +623,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& inOptions, IAr
 
     ComPtr<IArtifactDiagnostics> diagnostics(new ArtifactDiagnostics);
 
+    
     // TODO(JS): We might just want this to talk directly to the listener.
     // For now we just buffer up. 
     BufferedDiagnosticConsumer diagsBuffer(diagnostics);
@@ -856,7 +857,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& inOptions, IAr
             diagnostics->setResult(SLANG_FAIL);
 
             auto artifact = ArtifactUtil::createArtifact(ArtifactDesc::make(ArtifactKind::None, ArtifactPayload::None));
-            artifact->addAssociated(diagnostics);
+            ArtifactUtil::addAssociated(artifact, diagnostics);
 
             *outArtifact = artifact.detach();
             return SLANG_OK;
@@ -958,7 +959,7 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& inOptions, IAr
                     diagnostics->setResult(SLANG_FAIL);
 
                     auto artifact = ArtifactUtil::createArtifact(ArtifactDesc::make(ArtifactKind::None, ArtifactPayload::None));
-                    artifact->addAssociated(diagnostics);
+                    ArtifactUtil::addAssociated(artifact, diagnostics);
 
                     *outArtifact = artifact.detach();
                     return SLANG_OK;
@@ -1040,7 +1041,8 @@ SlangResult LLVMDownstreamCompiler::compile(const CompileOptions& inOptions, IAr
             const auto targetDesc = ArtifactDescUtil::makeDescForCompileTarget(options.targetType);
 
             auto artifact = ArtifactUtil::createArtifact(targetDesc);
-            artifact->addAssociated(diagnostics);
+            ArtifactUtil::addAssociated(artifact, diagnostics);
+
             artifact->addRepresentation(sharedLibrary);
 
             *outArtifact = artifact.detach();
