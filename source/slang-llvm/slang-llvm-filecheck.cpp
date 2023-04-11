@@ -161,7 +161,7 @@ void* LLVMFileCheck::getInterface(const Guid& guid)
         guid == ICastable::getTypeGuid() ||
         guid == IFileCheck::getTypeGuid())
     {
-        return this;
+        return static_cast<IFileCheck*>(this);
     }
     return nullptr;
 }
