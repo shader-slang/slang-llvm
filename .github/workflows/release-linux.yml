@@ -21,8 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: 'true'
-          fetch-depth: '0'
+          submodules: 'recursive'
 
       - name: premake
         run: |
