@@ -321,19 +321,15 @@ struct NameAndFunc
 #define SLANG_LLVM_FUNC(name, cppName, retType, paramTypes) NameAndFunc{ #name, (NameAndFunc::Func)static_cast<retType (*) paramTypes>(&SLANG_LLVM_EXPAND(cppName)) },
 
 // Implementations of maths functions available to JIT
-static float F32_frexp(float x, float* e)
+static float F32_frexp(float x, int* e)
 {
-    int ei;
-    float m = ::frexpf(x, &ei);
-    *e = float(ei);
+    float m = ::frexpf(x, e);
     return m;
 }
 
-static double F64_frexp(double x, double* e)
+static double F64_frexp(double x, int* e)
 {
-    int ei;
-    double m = ::frexp(x, &ei);
-    *e = double(ei);
+    double m = ::frexp(x, e);
     return m;
 }
 
