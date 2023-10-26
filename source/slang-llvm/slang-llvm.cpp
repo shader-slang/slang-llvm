@@ -418,7 +418,7 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
     \
     x(F64_atan2, atan2, double, (double, double)) \
     \
-    x(F64_frexp, F64_frexp, double, (double, double*)) \
+    x(F64_frexp, F64_frexp, double, (double, int*)) \
     x(F64_pow, pow, double, (double, double)) \
     \
     x(F64_modf, modf, double, (double, double*)) \
@@ -453,7 +453,7 @@ static uint64_t __stdcall _aulldiv(uint64_t a, uint64_t b)
     \
     x(F32_atan2, atan2f, float, (float, float)) \
     \
-    x(F32_frexp, F32_frexp, float, (float, float*)) \
+    x(F32_frexp, F32_frexp, float, (float, int*)) \
     x(F32_pow, powf, float, (float, float)) \
     \
     x(F32_modf, modff, float, (float, float*)) \
