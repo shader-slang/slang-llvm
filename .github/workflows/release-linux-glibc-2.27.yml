@@ -1,0 +1,70 @@
+name: Upload Asset - Linux
+
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+jobs:
+  build:
+    name: Upload Asset - Linux
+    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    # runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
+
+    strategy:
+      matrix:
+        # Might want debug once release works
+        configuration: ['release'] # , 'debug']
+        platform: ['x64']
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+      - name: build docker image
+        run: docker build -t ubuntu-18.04-gcc-9 ./.github/workflows/dockerfiles/ubuntu-18.04-x64
+
+      # build the binary in docker image
+      - name: Run the build process with Docker
+        uses: addnab/docker-run-action@v3
+        with:
+            image: ubuntu-18.04-gcc-9
+            options: -v ${{ github.workspace }}:/home/app
+            run: |
+              cd /home/app
+              git config --global --add safe.directory /home/app
+              PREMAKE=external/slang-binaries/premake/premake-5.0.0-alpha16/bin/linux-64/premake5
+              chmod u+x ${PREMAKE}
+              ${PREMAKE} gmake --deps=true --no-progress=true
+              make config=${{matrix.configuration}}_${{matrix.platform}} -j`nproc`
+
+      - name: archive
+        id: archive
+        run: |
+          echo "achiving files..."
+
+          ARCH_NAME=`uname -p`
+          PLATFORM_NAME="linux-x86_64"
+          TAG_NAME=`git describe --tags`
+          SLANG_LLVM_VERSION=${TAG_NAME#"v"}
+
+          echo "tag:$TAG_NAME"
+          echo "slang-llvm-version:$LLVM_VERSION"
+
+          BIN_ARCHIVE="slang-llvm-$TAG_NAME-$PLATFORM_NAME-${{matrix.configuration}}-glibc-2.27.zip"
+
+          zip "$BIN_ARCHIVE" README.md
+          zip "$BIN_ARCHIVE" LICENSE
+          zip "$BIN_ARCHIVE" -r bin/*/*/*.so
+
+          echo "BINARY_ARCHIVE=${BIN_ARCHIVE}" >> $GITHUB_OUTPUT
+
+      - name: Upload Archive
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ steps.archive.outputs.BINARY_ARCHIVE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
