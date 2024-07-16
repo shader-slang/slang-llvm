@@ -1,3 +1,9 @@
+# Deprecated Repo
+
+Please don't use this repo directly as it has been integrated into
+[slang](https://github.com/shader-slang/slang/tree/master/source/slang-llvm).
+Please make changes there instead.
+
 Slang LLVM/Clang Library
 ========================
 
